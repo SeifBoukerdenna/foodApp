@@ -10,14 +10,20 @@ import Combine
 
 struct LoginView: View {
     // ── State ─────────────────────────────────────────────────────────────
+    @Binding var showLogin: Bool
     @State private var email          = ""
     @State private var password       = ""
     @State private var kbHeight: CGFloat = 0
     @FocusState private var focus: Field?
     private enum Field { case email, password }
 
-    // How much the speech-bubble climbs up so it “kisses” the penguin
+    // How much the speech-bubble climbs up so it "kisses" the penguin
     private let bubbleOverlap: CGFloat = -18     // tweak ± to taste
+    
+    // ── Initializer ─────────────────────────────────────────────────────────
+    init(showLogin: Binding<Bool>) {
+        self._showLogin = showLogin
+    }
 
     // ── Body ──────────────────────────────────────────────────────────────
     var body: some View {
@@ -35,7 +41,7 @@ struct LoginView: View {
                         .scaledToFit()
                         .frame(width: 170)
                         // Pull the penguin down a hair so its art-board
-                        // doesn’t leave transparent padding above bubble
+                        // doesn't leave transparent padding above bubble
                         .padding(.bottom, bubbleOverlap)   // negative == up
 
                     // 💬 Bubble
@@ -103,10 +109,12 @@ struct LoginView: View {
                     }
 
                     // Sign-up
-                    Button("First time here? Sign Up") { /* TODO */ }
-                        .font(.system(size: 16))
-                        .foregroundColor(.white)
-                        .padding(.top, 28)
+                    Button("First time here? Sign Up") {
+                        showLogin = false
+                    }
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+                    .padding(.top, 28)
 
                     Spacer()
                 }
@@ -143,68 +151,12 @@ struct LoginView: View {
     }
 }
 
-// MARK: - Reusable sub-components
-private struct PlaceholderField: View {
-    let placeholder: String
-    @Binding var text: String
-    var secure = false
 
-    init(_ placeholder: String, text: Binding<String>, secure: Bool = false) {
-        self.placeholder = placeholder
-        self._text = text
-        self.secure = secure
-    }
-
-    var body: some View {
-        ZStack(alignment: .leading) {
-            if text.isEmpty {
-                Text(placeholder).foregroundColor(.black)
-            }
-            Group {
-                secure ? AnyView(SecureField("", text: $text))
-                       : AnyView(TextField("", text: $text)
-                                    .autocapitalization(.none)
-                                    .keyboardType(.emailAddress)
-                                    .textContentType(.emailAddress))
-            }
-            .foregroundColor(.black)
-        }
-        .padding(.vertical, 18)
-        .padding(.horizontal, 20)
-        .background(Color.white)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.black, lineWidth: 1)
-        )
-    }
-}
-
-private struct PrimaryButton: View {
-    let title: String; let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
-                .background(Color.black)
-                .cornerRadius(12)
-        }
-    }
-}
-
-// MARK: - Constants
-extension Color {
-    /// #E84936
-    static let brandRed = Color(red: 232/255, green: 73/255, blue: 54/255)
-}
 
 // MARK: - Hide keyboard helper
 #if canImport(UIKit)
 extension View {
-    fileprivate func hideKeyboard() {
+    func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                         to: nil, from: nil, for: nil)
     }

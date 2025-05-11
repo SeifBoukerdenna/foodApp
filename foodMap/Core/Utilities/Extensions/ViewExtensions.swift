@@ -1,21 +1,18 @@
+//
+//  ViewExtension.swift
+//  FoodMap
+//
+//  Extension methods for View
+//
+
 import SwiftUI
 
+// MARK: - Hide keyboard helper
+#if canImport(UIKit)
 extension View {
-    func primaryButtonStyle() -> some View {
-        self
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color.black)
-            .cornerRadius(8)
-            .padding(.horizontal)
-    }
-    
-    func customTextFieldStyle() -> some View {
-        self
-            .padding()
-            .background(Color.white)
-            .cornerRadius(8)
-            .padding(.horizontal)
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
     }
 }
+#endif
