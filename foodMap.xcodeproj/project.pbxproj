@@ -10,9 +10,22 @@
 		71310F542DD0272400A2634A /* foodMap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = foodMap.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		71310F722DD02DA100A2634A /* Exceptions for "foodMap" folder in "foodMap" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/Utilities/Extensions/ViewExtensions.swift,
+			);
+			target = 71310F532DD0272400A2634A /* foodMap */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		71310F562DD0272400A2634A /* foodMap */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				71310F722DD02DA100A2634A /* Exceptions for "foodMap" folder in "foodMap" target */,
+			);
 			path = foodMap;
 			sourceTree = "<group>";
 		};
