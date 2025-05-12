@@ -29,7 +29,7 @@ struct SignUpView: View {
     // MARK: - Body
     var body: some View {
         if showOnboarding {
-            OnboardingFlow()
+            OnboardingContainer()
         } else {
             GeometryReader { geo in
                 ZStack(alignment: .top) {

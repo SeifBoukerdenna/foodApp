@@ -6,21 +6,21 @@
 //
 
 import SwiftUI
-import Combine
 
 struct DisplayNameView: View {
     // MARK: - Properties
     @Binding var displayName: String
     var onConfirm: () -> Void
+    @State private var keyboardIsVisible = false
     
-    @State private var kbHeight: CGFloat = 0
     @FocusState private var isFocused: Bool
     
     // MARK: - Body
     var body: some View {
-        GeometryReader { geo in
+        ScrollView {
             VStack(spacing: 0) {
-                Spacer(minLength: geo.safeAreaInsets.top)
+                // Top spacing - consistent across all screens
+                Spacer().frame(height: 100)
                 
                 // 🐧 Chef Penguin
                 Image("penguin_explanation")
@@ -47,7 +47,7 @@ struct DisplayNameView: View {
                     )
                     .offset(y: -18)
                 
-                // Gap after bubble
+                // Gap after bubble - consistent across screens
                 Spacer().frame(height: 32 + 18)
                 
                 // Display Name field
@@ -82,31 +82,16 @@ struct DisplayNameView: View {
                 }
                 .padding(.horizontal, 24)
                 
-                Spacer()
+                // Add extra padding at bottom for keyboard
+                Spacer().frame(height: 200)
             }
-            .frame(maxWidth: .infinity, alignment: .top)
-            .onTapGesture {
-                hideKeyboard()
-            }
-            .onReceive(keyboardPublisher) { h in
-                withAnimation(.easeOut(duration: 0.2)) { kbHeight = h }
-            }
-            .safeAreaInset(edge: .bottom) {
-                Color.clear.frame(height: kbHeight)
-            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 20)
         }
-    }
-    
-    // MARK: - Helpers
-    private var keyboardPublisher: AnyPublisher<CGFloat, Never> {
-        Publishers.Merge(
-            NotificationCenter.default
-                .publisher(for: UIResponder.keyboardWillShowNotification)
-                .compactMap { ($0.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height },
-            NotificationCenter.default
-                .publisher(for: UIResponder.keyboardWillHideNotification)
-                .map { _ in CGFloat(0) }
-        ).eraseToAnyPublisher()
+        .onTapGesture {
+            hideKeyboard()
+        }
+        .scrollDismissesKeyboard(.interactively)
     }
 }
 

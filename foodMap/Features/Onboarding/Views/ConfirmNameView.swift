@@ -16,6 +16,9 @@ struct ConfirmNameView: View {
     // MARK: - Body
     var body: some View {
         VStack(spacing: 0) {
+            // Top spacing - consistent across all screens
+            Spacer().frame(height: 100)
+            
             // 🐧 Chef Penguin
             Image("penguin_explanation")
                 .resizable()
@@ -41,7 +44,7 @@ struct ConfirmNameView: View {
                 )
                 .offset(y: -18)
             
-            // Gap after bubble
+            // Gap after bubble - consistent across screens
             Spacer().frame(height: 32 + 18)
             
             // Yes/No buttons
@@ -72,8 +75,7 @@ struct ConfirmNameView: View {
             
             Spacer()
         }
-        .frame(maxWidth: .infinity, alignment: .top)
-        .padding(.top, 100)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
