@@ -11,294 +11,324 @@ struct HomeView: View {
         center: CLLocationCoordinate2D(latitude: 45.5741, longitude: -73.6921), // Laval coordinates
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
     )
-    @State private var showingSearchResults = false
     
     // MARK: - Body
     var body: some View {
-        ZStack(alignment: .top) {
-            // Map Background - Full screen with dark mode styling
+        ZStack {
+            // Dark map background
             Map(coordinateRegion: $region)
-                .ignoresSafeArea()
                 .colorScheme(.dark)
+                .ignoresSafeArea()
             
-            // Search bar at the top
+            // Main content
             VStack(spacing: 0) {
-                // Top safety space
-                Color.clear.frame(height: 48)
-                
-                // Search Bar
-                searchBar
-                
-                Spacer()
-            }
-            
-            // Restaurant suggestion overlay when results exist
-            if viewModel.isLoading || viewModel.errorMessage != nil {
-                VStack {
-                    Spacer()
-                    suggestionOverlay
+                // Header with search
+                VStack(spacing: 16) {
+                    // Spacer for status bar
+                    Spacer().frame(height: 44)
+                    
+                    // Search bar
+                    searchBarView
                 }
-            }
-            
-            // Bottom "Find me a feast" card
-            VStack {
+                
                 Spacer()
-                findMeAFeastCard
-                    .padding(.bottom, 80) // Make room for tab bar
-            }
-            
-            // Penguin overlay (in bottom right)
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Image("penguin_chef")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 70)
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 120)
-                }
+                
+                // Always show the container, just change its content
+                suggestionsContainerView
             }
             
             // Tab bar at bottom
             VStack {
                 Spacer()
-                CustomTabBar(selectedTab: .home)
+                tabBarView
             }
-            .ignoresSafeArea(.keyboard)
         }
         .ignoresSafeArea(.keyboard)
         .preferredColorScheme(.dark)
         .onAppear {
-            // Get restaurant suggestions automatically when the view appears
-            if viewModel.suggestedRestaurants.isEmpty && viewModel.errorMessage == nil {
-                viewModel.getDefaultSuggestions()
+            // Load suggestions after a small delay to avoid state updates during view render
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if viewModel.suggestedRestaurants.isEmpty && viewModel.errorMessage == nil {
+                    viewModel.getDefaultSuggestions()
+                }
             }
         }
         .sheet(isPresented: $showPreferencesSheet) {
-            PreferencesSheet(isPresented: $showPreferencesSheet, onSubmit: { preferences in
+            PreferencesSheet(isPresented: $showPreferencesSheet) { preferences in
                 viewModel.getRestaurantSuggestions(preferences: preferences)
-            })
+            }
         }
     }
     
-    // MARK: - Search Bar
-    private var searchBar: some View {
+    // MARK: - Search Bar View
+    private var searchBarView: some View {
         ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white)
+                .fill(Color.black.opacity(0.7))
                 .frame(height: 50)
-                .shadow(radius: 2)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                )
             
             HStack {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.7))
                 
                 TextField("Where do you want to eat?", text: $searchText)
-                    .foregroundColor(.black)
+                    .foregroundColor(.white)
+                    .accentColor(.white)
             }
             .padding(.horizontal, 16)
         }
         .padding(.horizontal, 16)
     }
     
-    // MARK: - Find Me A Feast Card
-    private var findMeAFeastCard: some View {
-        Button(action: {
-            viewModel.getDefaultSuggestions()
-        }) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Oh Mighty Penguin, Find")
-                    .font(.system(size: 18, weight: .bold))
-                
-                Text("Me a Feast!")
-                    .font(.system(size: 18, weight: .bold))
+    // MARK: - Suggestions Container
+    private var suggestionsContainerView: some View {
+        VStack(spacing: 0) {
+            // Container for either penguin CTA or restaurant suggestions
+            if viewModel.isLoading || viewModel.errorMessage != nil || !viewModel.suggestedRestaurants.isEmpty {
+                // Show suggestions/loading/error
+                suggestionContent
+            } else {
+                // Show penguin CTA
+                penguinCTAView
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 16)
-            .padding(.horizontal, 20)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(0.8))
-            )
-            .foregroundColor(.white)
-            .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 85) // Space for tab bar
+    }
+    
+    // MARK: - Penguin CTA View
+    private var penguinCTAView: some View {
+        VStack(spacing: 0) {
+            // Penguin image
+            Image("penguin_chef")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 100)
+                .padding(.bottom, -10)
+            
+            // CTA Button
+            Button(action: {
+                viewModel.getDefaultSuggestions()
+            }) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Oh Mighty Penguin, Find")
+                        .font(.system(size: 18, weight: .bold))
+                    
+                    Text("Me a Feast!")
+                        .font(.system(size: 18, weight: .bold))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
+                .padding(.horizontal, 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.black.opacity(0.8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        )
+                )
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+            }
         }
     }
     
-    // MARK: - Suggestion Overlay
-    private var suggestionOverlay: some View {
+    // MARK: - Suggestion Content (Loading, Error, or Results)
+    private var suggestionContent: some View {
         VStack(spacing: 0) {
-            // Header - black background with title
-            Text("Restaurant Suggestions")
-                .font(.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
-                .background(Color.black)
+            // Header
+            HStack {
+                Text("Restaurant Suggestions")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                // Customize button
+                Button(action: {
+                    showPreferencesSheet = true
+                }) {
+                    HStack(spacing: 4) {
+                        Text("Customize")
+                            .font(.subheadline)
+                        
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(
+                        Capsule()
+                            .fill(Color.brandRed)
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
             
             // Content
             if viewModel.isLoading {
                 loadingView
-                    .frame(height: 250)
             } else if let errorMessage = viewModel.errorMessage {
                 errorView
-                    .frame(height: 250)
-            } else if !viewModel.suggestedRestaurants.isEmpty {
+            } else {
                 suggestionsView
-                    .frame(height: 250)
             }
         }
-        .background(Color.black)
-        .cornerRadius(16, corners: [.topLeft, .topRight])
-        .shadow(radius: 10)
-        .padding(.bottom, 80) // Space for the tab bar
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.black.opacity(0.85))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 16)
     }
     
     // MARK: - Loading View
     private var loadingView: some View {
-        ZStack {
-            Color.white
+        VStack(spacing: 16) {
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                .scaleEffect(1.5)
             
-            VStack(spacing: 16) {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .black))
-                    .scaleEffect(1.5)
-                
-                Text("Finding delicious options for you...")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.black)
-                    .multilineTextAlignment(.center)
-            }
+            Text("Chef Penguin is cooking up suggestions...")
+                .font(.body)
+                .foregroundColor(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
         }
+        .frame(height: 150)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
     }
     
     // MARK: - Error View
     private var errorView: some View {
-        ZStack {
-            Color.white
+        VStack(spacing: 16) {
+            Text("😕")
+                .font(.system(size: 40))
             
-            VStack(spacing: 16) {
-                Text("😕")
-                    .font(.system(size: 50))
-                
-                Text("Error: The operation couldn't be completed. (foodMap.NetworkError error 2.)")
-                    .font(.system(size: 16))
-                    .foregroundColor(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                Button(action: {
-                    viewModel.getDefaultSuggestions()
-                }) {
-                    Text("Try Again")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 12)
-                        .background(Color.black)
-                        .cornerRadius(8)
-                }
-                .padding(.top, 8)
+            Text("Error: The operation couldn't be completed. (foodMap.NetworkError error 2.)")
+                .font(.body)
+                .foregroundColor(.red.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            
+            Button(action: {
+                viewModel.getDefaultSuggestions()
+            }) {
+                Text("Try Again")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(Color.brandRed)
+                    .cornerRadius(10)
             }
-            .padding(.horizontal, 16)
         }
+        .frame(height: 200)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
     }
     
     // MARK: - Suggestions View
     private var suggestionsView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack {
-                Color.white
-
+        VStack(alignment: .leading, spacing: 12) {
+            // Restaurant suggestions content
+            ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Image("penguin_chef")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 36, height: 36)
-                        
-                        Text("Chef Penguin's Recommendations")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
-                    }
-                    
-                    ScrollView {
-                        Text(viewModel.suggestedRestaurants)
-                            .font(.body)
-                            .foregroundColor(.black)
-                    }
-                    
-                    Button(action: {
-                        showPreferencesSheet = true
-                    }) {
-                        HStack {
-                            Text("Customize Preferences")
-                                .font(.system(size: 14, weight: .medium))
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .bold))
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(Color.brandRed)
-                        .cornerRadius(8)
-                        .foregroundColor(.white)
+                    ForEach(parseRestaurantSuggestions(), id: \.id) { restaurant in
+                        restaurantCard(restaurant)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 16)
+            }
+            .frame(maxHeight: 300)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+    }
+    
+    // MARK: - Restaurant Card
+    private func restaurantCard(_ restaurant: Restaurant) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Restaurant name
+            Text(restaurant.name)
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            // Restaurant details
+            Text(restaurant.description)
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.8))
+                .lineLimit(3)
+            
+            // Tags
+            HStack {
+                ForEach(restaurant.tags, id: \.self) { tag in
+                    Text(tag)
+                        .font(.caption)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.brandRed.opacity(0.8))
+                        .cornerRadius(4)
+                }
             }
         }
-    }
-}
-
-// MARK: - Tab Bar
-struct CustomTabBar: View {
-    enum Tab {
-        case home, friends, map, cart, profile
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(10)
     }
     
-    var selectedTab: Tab
-    
-    var body: some View {
+    // MARK: - Tab Bar View
+    private var tabBarView: some View {
         HStack(spacing: 0) {
-            tabButton(title: "Home", icon: "house.fill", isSelected: selectedTab == .home)
-            tabButton(title: "Friends", icon: "person.2.fill", isSelected: selectedTab == .friends)
+            // Tab buttons
+            tabButton(icon: "house.fill", title: "Home", isSelected: true)
+            tabButton(icon: "person.2.fill", title: "Friends", isSelected: false)
             
-            // Center map button
-            Button(action: {}) {
+            // Center button
+            ZStack {
                 Circle()
                     .fill(Color.brandRed)
                     .frame(width: 56, height: 56)
                     .overlay(
-                        Image(systemName: "mappin.and.ellipse")
-                            .font(.system(size: 24))
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 30))
                             .foregroundColor(.white)
                     )
                     .offset(y: -15)
-                    .shadow(radius: 4)
             }
             .frame(width: UIScreen.main.bounds.width / 5)
             
-            tabButton(title: "Cart", icon: "cart.fill", isSelected: selectedTab == .cart)
-            tabButton(title: "Profile", icon: "person.crop.circle.fill", isSelected: selectedTab == .profile)
+            tabButton(icon: "cart.fill", title: "Cart", isSelected: false)
+            tabButton(icon: "person.crop.circle.fill", title: "Profile", isSelected: false)
         }
+        .frame(height: 49)
         .padding(.top, 8)
-        .padding(.bottom, 30) // Add extra padding at bottom for safe area
-        .background(Color.brandRed)
+        .padding(.bottom, 28) // Safe area padding
+        .background(
+            Color.brandRed
+                .cornerRadius(25, corners: [.topLeft, .topRight])
+                .edgesIgnoringSafeArea(.bottom)
+        )
     }
     
-    private func tabButton(title: String, icon: String, isSelected: Bool) -> some View {
+    private func tabButton(icon: String, title: String, isSelected: Bool) -> some View {
         Button(action: {}) {
             VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 20))
+                    .font(.system(size: 22))
                 
                 Text(title)
                     .font(.system(size: 12))
@@ -307,6 +337,75 @@ struct CustomTabBar: View {
             .frame(maxWidth: .infinity)
         }
     }
+    
+    // MARK: - Helper Methods
+    private func parseRestaurantSuggestions() -> [Restaurant] {
+        // This is a simple parser that extracts restaurant names and descriptions
+        // from the GPT response text
+        let text = viewModel.suggestedRestaurants
+        
+        // Split by numbered list items (assumes the format includes numbers like "1. ")
+        let pattern = #"\d+\.\s+\*\*([^*]+)\*\*:([^\n]+)(?:\n\n|\.$|\z)"#
+        
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return [Restaurant(
+                id: UUID().uuidString,
+                name: "Restaurant Recommendations",
+                description: text,
+                tags: ["Italian", "Vegetarian", "Gluten-Free"]
+            )]
+        }
+        
+        let nsString = text as NSString
+        let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsString.length))
+        
+        var restaurants: [Restaurant] = []
+        
+        if !matches.isEmpty {
+            for match in matches {
+                if match.numberOfRanges >= 3 {
+                    let nameRange = match.range(at: 1)
+                    let descRange = match.range(at: 2)
+                    
+                    if nameRange.location != NSNotFound && descRange.location != NSNotFound {
+                        let name = nsString.substring(with: nameRange).trimmingCharacters(in: .whitespacesAndNewlines)
+                        let description = nsString.substring(with: descRange).trimmingCharacters(in: .whitespacesAndNewlines)
+                        
+                        let tags: [String] = ["Italian", "Vegetarian", "Gluten-Free"]
+                        
+                        restaurants.append(Restaurant(
+                            id: UUID().uuidString,
+                            name: name,
+                            description: description,
+                            tags: tags
+                        ))
+                    }
+                }
+            }
+        }
+        
+        // If no matches, create a fallback restaurant from the whole text
+        if restaurants.isEmpty {
+            restaurants = [
+                Restaurant(
+                    id: UUID().uuidString,
+                    name: "Restaurant Recommendations",
+                    description: text,
+                    tags: ["Italian", "Vegetarian", "Gluten-Free"]
+                )
+            ]
+        }
+        
+        return restaurants
+    }
+}
+
+// MARK: - Restaurant Model
+struct Restaurant {
+    let id: String
+    let name: String
+    let description: String
+    let tags: [String]
 }
 
 // MARK: - Preferences Sheet
@@ -355,6 +454,7 @@ struct PreferencesSheet: View {
                                 .cornerRadius(12)
                         }
                         .padding(.top, 24)
+                        .padding(.bottom, 60) // Extra padding to avoid keyboard overlap
                     }
                     .padding()
                 }
@@ -482,7 +582,7 @@ struct PreferencesSheet: View {
     }
 }
 
-// MARK: - View Extensions
+// MARK: - Extensions
 extension View {
     func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape(RoundedCorner(radius: radius, corners: corners))

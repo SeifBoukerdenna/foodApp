@@ -1,41 +1,41 @@
-//
-//  foodMapApp.swift
-//  FoodMap
-//
-
 import SwiftUI
 
 @main
 struct FoodMapApp: App {
-    // Environment configuration
-    @StateObject private var appState = AppState()
+    // Environment objects and state
+    @StateObject private var appEnvironment = AppEnvironment.shared
     
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(appState)
+                .environmentObject(appEnvironment)
+                .preferredColorScheme(.dark) // Force dark theme throughout
                 .onAppear {
-                    // Initialize environment and other app settings
                     setupApp()
                 }
         }
     }
     
     private func setupApp() {
-        // Configure NetworkClient with the proper URL
-        // For physical devices, update the IP address in Configuration.swift
+        // Configure optional global settings
+        configureKeyboardSettings()
         
-        // Set a default user ID if not already set
+        // Add default user ID if none exists
         if UserDefaults.standard.string(forKey: "userId") == nil {
             UserDefaults.standard.set(UUID().uuidString, forKey: "userId")
         }
+        
+        // Print app info
+        #if DEBUG
+        print("FoodMap app started in debug mode")
+        #else
+        print("FoodMap app started in release mode")
+        #endif
     }
-}
-
-// App-wide state container
-class AppState: ObservableObject {
-    @Published var isAuthenticated = false
-    @Published var currentUser: User? = nil
     
-    // Additional app-wide state can be added here
+    // Use this method to configure keyboard handling
+    private func configureKeyboardSettings() {
+        // This disables automatic keyboard scrolling adjustment which causes layout issues
+        UIScrollView.appearance().keyboardDismissMode = .interactive
+    }
 }

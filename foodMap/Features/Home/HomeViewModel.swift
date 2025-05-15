@@ -1,3 +1,4 @@
+
 import Foundation
 import Combine
 
@@ -21,38 +22,45 @@ class HomeViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         
+        // Log preferences for debugging
         print("Getting restaurant suggestions with preferences: \(preferences)")
         
-        gptService.getRestaurantSuggestions(preferences: preferences)
-            .receive(on: DispatchQueue.main)
-            .sink(
-                receiveCompletion: { [weak self] completion in
-                    guard let self = self else { return }
-                    self.isLoading = false
-                    
-                    if case let .failure(error) = completion {
-                        print("Error fetching restaurant suggestions: \(error)")
+        // Use a delay to ensure we're not modifying state during view updates
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self = self else { return }
+            
+            self.gptService.getRestaurantSuggestions(preferences: preferences)
+                .receive(on: DispatchQueue.main)
+                .sink(
+                    receiveCompletion: { [weak self] completion in
+                        guard let self = self else { return }
                         
-                        // Format error message for display
-                        if let networkError = error as? NetworkError {
-                            self.errorMessage = networkError.localizedDescription
+                        self.isLoading = false
+                        
+                        if case let .failure(error) = completion {
+                            print("Error fetching restaurant suggestions: \(error)")
+                            
+                            // Format error message for display
+                            if let networkError = error as? NetworkError {
+                                self.errorMessage = networkError.localizedDescription
+                            } else {
+                                self.errorMessage = "The operation couldn't be completed."
+                            }
+                        }
+                    },
+                    receiveValue: { [weak self] response in
+                        guard let self = self else { return }
+                        
+                        if let firstChoice = response.choices.first {
+                            self.suggestedRestaurants = firstChoice.message.content
+                            print("✅ Got restaurant suggestions: \(self.suggestedRestaurants.prefix(50))...")
                         } else {
-                            self.errorMessage = "The operation couldn't be completed. (foodMap.NetworkError error 2.)"
+                            self.errorMessage = "No recommendations available"
                         }
                     }
-                },
-                receiveValue: { [weak self] response in
-                    guard let self = self else { return }
-                    guard let firstChoice = response.choices.first else {
-                        self.errorMessage = "No recommendations available"
-                        return
-                    }
-                    
-                    self.suggestedRestaurants = firstChoice.message.content
-                    print("✅ Got restaurant suggestions: \(self.suggestedRestaurants.prefix(50))...")
-                }
-            )
-            .store(in: &cancellables)
+                )
+                .store(in: &self.cancellables)
+        }
     }
     
     func getDefaultSuggestions() {
@@ -72,4 +80,4 @@ class HomeViewModel: ObservableObject {
         
         getRestaurantSuggestions(preferences: preferences)
     }
-}
+} 
