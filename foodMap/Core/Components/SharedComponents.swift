@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Placeholder Field
 struct PlaceholderField: View {
     let placeholder: String
     @Binding var text: String
@@ -45,6 +44,16 @@ struct PlaceholderField: View {
     }
 }
 
+struct PlaceholderField_Previews: PreviewProvider {
+    static var previews: some View {
+        ZStack {
+            Color.brandRed.ignoresSafeArea()
+            PlaceholderField("Email", text: .constant(""))
+                .padding()
+        }
+    }
+}
+
 // MARK: - Primary Button
 struct PrimaryButton: View {
     let title: String
@@ -59,6 +68,16 @@ struct PrimaryButton: View {
                 .padding(.vertical, 18)
                 .background(Color.black)
                 .cornerRadius(12)
+        }
+    }
+}
+
+struct PrimaryButton_Previews: PreviewProvider {
+    static var previews: some View {
+        ZStack {
+            Color.brandRed.ignoresSafeArea()
+            PrimaryButton(title: "Test Button", action: {})
+                .padding()
         }
     }
 }

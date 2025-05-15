@@ -11,8 +11,10 @@ import Combine
 struct LoginView: View {
     // ── State ─────────────────────────────────────────────────────────────
     @Binding var showLogin: Bool
-    @State private var email          = ""
-    @State private var password       = ""
+    var onLogin: ((String) -> Void)?
+    
+    @State private var email = ""
+    @State private var password = ""
     @State private var kbHeight: CGFloat = 0
     @FocusState private var focus: Field?
     private enum Field { case email, password }
@@ -21,8 +23,9 @@ struct LoginView: View {
     private let bubbleOverlap: CGFloat = -18     // tweak ± to taste
     
     // ── Initializer ─────────────────────────────────────────────────────────
-    init(showLogin: Binding<Bool>) {
+    init(showLogin: Binding<Bool>, onLogin: ((String) -> Void)? = nil) {
         self._showLogin = showLogin
+        self.onLogin = onLogin
     }
 
     // ── Body ──────────────────────────────────────────────────────────────
@@ -85,7 +88,13 @@ struct LoginView: View {
                     .padding(.bottom, 16)
 
                     // ▶︎ Log In
-                    PrimaryButton(title: "Log In") { /* TODO */ }
+                    PrimaryButton(title: "Log In") {
+                        // Call the onLogin closure with the email or username
+                        if !email.isEmpty {
+                            let displayName = email.split(separator: "@").first.map(String.init) ?? email
+                            onLogin?(displayName)
+                        }
+                    }
 
                     // Divider
                     HStack {
@@ -98,7 +107,10 @@ struct LoginView: View {
                     .padding(.vertical, 20)
 
                     // Google
-                    Button { /* TODO */ } label: {
+                    Button {
+                        // Simple demo login
+                        onLogin?("Guest User")
+                    } label: {
                         Image("google_icon")
                             .resizable()
                             .scaledToFit()
@@ -150,7 +162,6 @@ struct LoginView: View {
         ).eraseToAnyPublisher()
     }
 }
-
 
 
 // MARK: - Hide keyboard helper
