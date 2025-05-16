@@ -1,8 +1,18 @@
 import SwiftUI
+import FirebaseCore
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+  func application(_ application: UIApplication,
+                   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    FirebaseApp.configure()
+
+    return true
+  }
+}
 
 @main
 struct FoodMapApp: App {
-    // Environment objects and state
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var appEnvironment = AppEnvironment.shared
     
     var body: some Scene {
