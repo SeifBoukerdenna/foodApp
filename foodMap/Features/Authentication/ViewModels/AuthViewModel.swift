@@ -8,13 +8,14 @@ class AuthViewModel: ObservableObject {
     @Published var user: User?
     @Published var email = ""
     @Published var password = ""
-    @Published var username = ""
     @Published var displayName = ""
     @Published var errorMessage = ""
     @Published var isLoading = false
     @Published var isEmailVerified = false
     @Published var isCheckingEmailVerification = false
     @Published var verificationEmailSent = false
+    @Published var isUpdatingProfile = false
+    @Published var isDeletingAccount = false
     
     // MARK: - Private Properties
     private let _authService: AuthenticationServiceProtocol
@@ -131,7 +132,9 @@ class AuthViewModel: ObservableObject {
         
         print("🔑 Attempting signup for: \(email)")
         
-        let finalDisplayName = displayName.isEmpty ? username : displayName
+        let finalDisplayName = displayName.isEmpty ?
+            email.components(separatedBy: "@").first ?? "User" :
+            displayName
         
         authService.signUp(email: email, password: password, displayName: finalDisplayName)
             .receive(on: DispatchQueue.main)
@@ -192,6 +195,110 @@ class AuthViewModel: ObservableObject {
                 }
             )
             .store(in: &cancellables)
+    }
+    
+    /// Delete the user's account completely
+    func deleteAccount() {
+        guard let userId = user?.id else {
+            errorMessage = "No user logged in"
+            return
+        }
+        
+        isDeletingAccount = true
+        errorMessage = ""
+        
+        // Delete the Firebase Auth account directly
+        if let user = Auth.auth().currentUser {
+            user.delete { [weak self] error in
+                DispatchQueue.main.async {
+                    self?.isDeletingAccount = false
+                    
+                    if let error = error {
+                        print("❌ Failed to delete Firebase Auth account: \(error.localizedDescription)")
+                        self?.errorMessage = "Failed to delete account: \(error.localizedDescription)"
+                    } else {
+                        print("✅ Firebase Auth account deleted")
+                        self?.user = nil
+                        self?.isAuthenticated = false
+                        self?.isEmailVerified = false
+                        self?.errorMessage = ""
+                        self?.stopVerificationTimer()
+                    }
+                }
+            }
+        } else {
+            isDeletingAccount = false
+            errorMessage = "User not found"
+        }
+    }
+    
+    /// Update user's display name
+    func updateDisplayName(newName: String) {
+        guard let userId = user?.id else {
+            errorMessage = "No user logged in"
+            return
+        }
+        
+        isUpdatingProfile = true
+        errorMessage = ""
+        
+        // Create request for backend
+        let updateRequest: [String: String] = [
+            "uid": userId,
+            "username": newName.lowercased().replacingOccurrences(of: " ", with: "_"),
+            "displayName": newName
+        ]
+        
+        // First update in Firebase Auth
+        if let user = Auth.auth().currentUser {
+            let changeRequest = user.createProfileChangeRequest()
+            changeRequest.displayName = newName
+            
+            changeRequest.commitChanges { [weak self] error in
+                if let error = error {
+                    print("❌ Failed to update display name in Firebase Auth: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        self?.isUpdatingProfile = false
+                        self?.errorMessage = "Failed to update profile: \(error.localizedDescription)"
+                    }
+                    return
+                }
+                
+                print("✅ Display name updated in Firebase Auth")
+                
+                // Now update in backend
+                let networkClient = NetworkClient(baseURLString: AppEnvironment.shared.apiBaseURL)
+                networkClient.post(endpoint: "api/v1/user/update-username", body: updateRequest, requiresAuth: true)
+                    .receive(on: DispatchQueue.main)
+                    .sink(
+                        receiveCompletion: { [weak self] completion in
+                            self?.isUpdatingProfile = false
+                            
+                            if case let .failure(error) = completion {
+                                print("❌ Failed to update username in backend: \(error.localizedDescription)")
+                                self?.errorMessage = "Failed to update profile in database: \(error.localizedDescription)"
+                            }
+                        },
+                        receiveValue: { [weak self] (_: UserData) in
+                            guard let self = self else { return }
+                            
+                            print("✅ Username updated in backend")
+                            
+                            // Update the local user object
+                            if var currentUser = self.user {
+                                currentUser.displayName = newName
+                                self.user = currentUser
+                            }
+                            
+                            self.errorMessage = ""
+                        }
+                    )
+                    .store(in: &self!.cancellables)
+            }
+        } else {
+            isUpdatingProfile = false
+            errorMessage = "User not found"
+        }
     }
     
     /// Request password reset for the current email
@@ -403,33 +510,5 @@ class AuthViewModel: ObservableObject {
     /// Clear error message
     func clearError() {
         errorMessage = ""
-    }
-    
-    /// Update user display name
-    func updateDisplayName(newName: String) -> AnyPublisher<Bool, Error> {
-        guard let user = Auth.auth().currentUser else {
-            return Fail(error: AuthError.userNotFound).eraseToAnyPublisher()
-        }
-        
-        return Future<Bool, Error> { promise in
-            let changeRequest = user.createProfileChangeRequest()
-            changeRequest.displayName = newName
-            
-            changeRequest.commitChanges { error in
-                if let error = error {
-                    print("❌ Failed to update display name: \(error.localizedDescription)")
-                    promise(.failure(error))
-                } else {
-                    print("✅ Display name updated to: \(newName)")
-                    // Update the local user object
-                    if var currentUser = self.user {
-                        currentUser.displayName = newName
-                        self.user = currentUser
-                    }
-                    promise(.success(true))
-                }
-            }
-        }
-        .eraseToAnyPublisher()
     }
 }

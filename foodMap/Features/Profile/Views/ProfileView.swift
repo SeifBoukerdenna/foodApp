@@ -3,6 +3,10 @@ import SwiftUI
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var showConfirmLogout = false
+    @State private var showConfirmDelete = false
+    @State private var isEditingDisplayName = false
+    @State private var newDisplayName = ""
+    @State private var showNameUpdateSuccess = false
     
     var body: some View {
         ZStack {
@@ -17,6 +21,9 @@ struct ProfileView: View {
                     // Email verification section
                     ProfileVerificationSection(viewModel: authViewModel)
                     
+                    // Display name update section
+                    displayNameUpdateSection
+                    
                     // Account section
                     accountSection
                     
@@ -26,6 +33,10 @@ struct ProfileView: View {
                     // Logout button
                     logoutButton
                         .padding(.top, 16)
+                    
+                    // Delete account button
+                    deleteAccountButton
+                        .padding(.top, 8)
                     
                     // App info
                     appInfo
@@ -42,6 +53,14 @@ struct ProfileView: View {
                 },
                 secondaryButton: .cancel()
             )
+        }
+        .alert("Delete Account", isPresented: $showConfirmDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                authViewModel.deleteAccount()
+            }
+        } message: {
+            Text("This will permanently delete your account and all associated data. This action cannot be undone.")
         }
     }
     
@@ -72,6 +91,117 @@ struct ProfileView: View {
         }
         .padding(.top, 64)
         .padding(.bottom, 20)
+    }
+    
+    private var displayNameUpdateSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Display Name")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            VStack(spacing: 16) {
+                if isEditingDisplayName {
+                    // Editing mode
+                    TextField("New Display Name", text: $newDisplayName)
+                        .padding()
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(8)
+                        .foregroundColor(.white)
+                    
+                    HStack {
+                        Button("Cancel") {
+                            isEditingDisplayName = false
+                            newDisplayName = ""
+                        }
+                        .foregroundColor(.white)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .background(Color.gray.opacity(0.3))
+                        .cornerRadius(8)
+                        
+                        Spacer()
+                        
+                        Button("Save") {
+                            if !newDisplayName.isEmpty {
+                                authViewModel.updateDisplayName(newName: newDisplayName)
+                                isEditingDisplayName = false
+                                showNameUpdateSuccess = true
+                                
+                                // Automatically hide success message after 3 seconds
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                    showNameUpdateSuccess = false
+                                }
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .background(Color.brandRed)
+                        .cornerRadius(8)
+                        .disabled(newDisplayName.isEmpty)
+                        .opacity(newDisplayName.isEmpty ? 0.5 : 1)
+                    }
+                } else {
+                    // Display mode
+                    HStack {
+                        Text(authViewModel.user?.displayName ?? "User")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white)
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            newDisplayName = authViewModel.user?.displayName ?? ""
+                            isEditingDisplayName = true
+                        }) {
+                            Text("Edit")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 12)
+                                .background(Color.brandRed)
+                                .cornerRadius(6)
+                        }
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(8)
+                }
+                
+                // Loading indicator or success message
+                if authViewModel.isUpdatingProfile {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        Text("Updating...")
+                            .foregroundColor(.white.opacity(0.8))
+                            .font(.system(size: 14))
+                        Spacer()
+                    }
+                } else if showNameUpdateSuccess {
+                    HStack {
+                        Spacer()
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Display name updated successfully!")
+                            .foregroundColor(.green)
+                            .font(.system(size: 14))
+                        Spacer()
+                    }
+                } else if !authViewModel.errorMessage.isEmpty {
+                    Text(authViewModel.errorMessage)
+                        .foregroundColor(.red)
+                        .font(.system(size: 14))
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 4)
+                }
+            }
+            .padding()
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(12)
+        }
+        .padding(.horizontal, 16)
     }
     
     private var accountSection: some View {
@@ -153,6 +283,50 @@ struct ProfileView: View {
             .cornerRadius(12)
             .padding(.horizontal, 16)
         }
+    }
+    
+    private var deleteAccountButton: some View {
+        Button(action: {
+            showConfirmDelete = true
+        }) {
+            HStack {
+                Spacer()
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "trash.fill")
+                    Text("Delete Account")
+                }
+                .font(.system(size: 16, weight: .medium))
+                
+                Spacer()
+            }
+            .foregroundColor(.white)
+            .padding(.vertical, 16)
+            .background(Color.red.opacity(0.8))
+            .cornerRadius(12)
+            .padding(.horizontal, 16)
+        }
+        .opacity(authViewModel.isDeletingAccount ? 0.5 : 1)
+        .disabled(authViewModel.isDeletingAccount)
+        .overlay(
+            Group {
+                if authViewModel.isDeletingAccount {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        Text("Deleting...")
+                            .foregroundColor(.white)
+                            .font(.system(size: 14))
+                        Spacer()
+                    }
+                    .padding(.vertical, 16)
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(12)
+                    .padding(.horizontal, 16)
+                }
+            }
+        )
     }
     
     private var appInfo: some View {

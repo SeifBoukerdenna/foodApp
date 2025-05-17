@@ -1,10 +1,3 @@
-//
-//  SignUpView.swift
-//  FoodMap
-//
-//  Sign up screen for user authentication - updated with verification flow
-//
-
 import SwiftUI
 import Combine
 
@@ -13,7 +6,6 @@ struct SignUpView: View {
     @Binding var showLogin: Bool
     var onSignUp: ((String) -> Void)?
     
-    @State private var username = ""
     @State private var email = ""
     @State private var password = ""
     @State private var kbHeight: CGFloat = 0
@@ -22,7 +14,7 @@ struct SignUpView: View {
     
     // MARK: - Types
     private enum Field {
-        case username, email, password
+        case email, password
     }
 
     // How much the speech-bubble climbs up so it "kisses" the penguin
@@ -52,7 +44,7 @@ struct SignUpView: View {
                         .padding(.bottom, bubbleOverlap)
 
                     // 💬 Bubble
-                    Text("Welcome to FoodMap! I'm Sakdoumz the Chef Penguin. How can I get to know you?")
+                    Text("Welcome to FoodMap! I'm Sakdoumz the Chef Penguin. Create your account to get started!")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.black)
                         .multilineTextAlignment(.center)
@@ -73,27 +65,44 @@ struct SignUpView: View {
                     Spacer().frame(height: 32 - bubbleOverlap)
 
                     // Input fields
-                    PlaceholderField("Username", text: $username)
-                        .focused($focus, equals: .username)
-                        .padding(.bottom, 12)
-                        
                     PlaceholderField("E-mail", text: $email)
                         .focused($focus, equals: .email)
-                        .padding(.bottom, 12)
+                        .padding(.bottom, 16)
+                        .onChange(of: email) { oldValue, newValue in
+                            viewModel.email = newValue
+                        }
+                        .keyboardType(.emailAddress)
+                        .textContentType(.emailAddress)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                        
 
                     PlaceholderField("Password", text: $password, secure: true)
                         .focused($focus, equals: .password)
-                        .padding(.bottom, 16)
-                        .textContentType(.password)
+                        .padding(.bottom, 24)
+                        .textContentType(.newPassword)
+                        .onChange(of: password) { oldValue, newValue in
+                            viewModel.password = newValue
+                        }
                         .accessibilityIdentifier("passwordField")
 
                     // Sign Up button
                     PrimaryButton(title: "Sign Up") {
+                        // Set values in view model
                         viewModel.email = email
                         viewModel.password = password
-                        viewModel.username = username
-                        viewModel.displayName = username // Use username as display name if none provided
+                        
+                        // Call the signup method
                         viewModel.signUp()
+                        
+                        // Wait a bit to ensure Firebase auth completes, then trigger the onSignUp callback
+                        // to ensure our navigation flags are set
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            if viewModel.isAuthenticated {
+                                print("SignUpView: User authenticated, invoking onSignUp callback")
+                                onSignUp?(email.components(separatedBy: "@").first ?? "User")
+                            }
+                        }
                     }
                     .disabled(viewModel.isLoading)
 
@@ -157,12 +166,12 @@ struct SignUpView: View {
                 Color.clear.frame(height: kbHeight)
             }
         }
+        // Add a direct observer for authentication state changes
         .onChange(of: viewModel.isAuthenticated) { oldValue, newValue in
-            if newValue {
-                // Complete signup and navigate to home
-                if let user = viewModel.user {
-                    onSignUp?(user.displayName ?? username)
-                }
+            if newValue && !oldValue {
+                // User just became authenticated (signup completed)
+                print("SignUpView: Authentication state changed to true")
+                onSignUp?(email.components(separatedBy: "@").first ?? "User")
             }
         }
     }
@@ -183,12 +192,5 @@ struct SignUpView: View {
                 .publisher(for: UIResponder.keyboardWillHideNotification)
                 .map { _ in CGFloat(0) }
         ).eraseToAnyPublisher()
-    }
-}
-
-struct SignUpView_Previews: PreviewProvider {
-    static var previews: some View {
-        SignUpView(showLogin: .constant(false))
-            .environmentObject(AuthViewModel())
     }
 }
