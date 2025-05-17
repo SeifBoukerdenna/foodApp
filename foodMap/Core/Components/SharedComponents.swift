@@ -11,11 +11,13 @@ struct PlaceholderField: View {
     let placeholder: String
     @Binding var text: String
     var secure = false
+    var contentType: UITextContentType?
     
-    init(_ placeholder: String, text: Binding<String>, secure: Bool = false) {
+    init(_ placeholder: String, text: Binding<String>, secure: Bool = false, contentType: UITextContentType? = nil) {
         self.placeholder = placeholder
         self._text = text
         self.secure = secure
+        self.contentType = contentType
     }
     
     var body: some View {
@@ -24,12 +26,15 @@ struct PlaceholderField: View {
                 Text(placeholder).foregroundColor(.black.opacity(0.6))
             }
             Group {
-                secure ? AnyView(SecureField("", text: $text))
-                       : AnyView(TextField("", text: $text)
-                            .autocapitalization(.none)
-                            .keyboardType(placeholder == "E-mail" ? .emailAddress : .default)
-                            .textContentType(placeholder == "E-mail" ? .emailAddress :
-                                            placeholder == "Username" ? .username : .none))
+                if secure {
+                    SecureField("", text: $text)
+                        .textContentType(contentType)
+                } else {
+                    TextField("", text: $text)
+                        .textContentType(contentType)
+                        .autocapitalization(.none)
+                        .keyboardType(placeholder == "E-mail" ? .emailAddress : .default)
+                }
             }
             .foregroundColor(.black)
         }

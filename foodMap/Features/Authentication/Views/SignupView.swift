@@ -84,6 +84,8 @@ struct SignUpView: View {
                     PlaceholderField("Password", text: $password, secure: true)
                         .focused($focus, equals: .password)
                         .padding(.bottom, 16)
+                        .textContentType(.password)
+                        .accessibilityIdentifier("passwordField")
 
                     // Sign Up button
                     PrimaryButton(title: "Sign Up") {
@@ -155,7 +157,7 @@ struct SignUpView: View {
                 Color.clear.frame(height: kbHeight)
             }
         }
-        .onChange(of: viewModel.isAuthenticated) { newValue in
+        .onChange(of: viewModel.isAuthenticated) { oldValue, newValue in
             if newValue {
                 // Complete signup and navigate to home
                 if let user = viewModel.user {

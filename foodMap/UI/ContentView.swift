@@ -8,6 +8,9 @@ struct ContentView: View {
     @State private var showVerificationScreen = false
     @State private var selectedTab = 0
     
+    // Check if we should auto-login
+    @State private var shouldAttemptAutoLogin = true
+    
     var body: some View {
         if authViewModel.isAuthenticated {
             if showVerificationScreen {
@@ -168,6 +171,27 @@ struct ContentView: View {
             .foregroundColor(isSelected ? .white : .white.opacity(0.7))
             .frame(maxWidth: .infinity)
         }
+    }
+    
+    // Auto-login with stored credentials
+    private func attemptAutoLogin() {
+        guard shouldAttemptAutoLogin,
+              !authViewModel.isAuthenticated,
+              let authService = authViewModel.authService as? AuthenticationService,
+              let credentials = authService.getCredentials() else {
+            // If we don't have credentials or already authenticated, do nothing
+            shouldAttemptAutoLogin = false
+            return
+        }
+        
+        // Prevent multiple attempts
+        shouldAttemptAutoLogin = false
+        
+        // Only auto-login if we have stored credentials
+        print("Attempting auto-login with stored credentials")
+        authViewModel.email = credentials.email
+        authViewModel.password = credentials.password
+        authViewModel.login()
     }
 }
 

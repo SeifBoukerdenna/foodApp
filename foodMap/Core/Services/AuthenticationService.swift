@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import FirebaseCore
 import FirebaseAuth
+import Security
 
 protocol AuthenticationServiceProtocol {
     func login(email: String, password: String) -> AnyPublisher<User, Error>
@@ -12,6 +13,8 @@ protocol AuthenticationServiceProtocol {
     func getIdToken() -> AnyPublisher<String, Error>
     func sendEmailVerification() -> AnyPublisher<Void, Error>
     func checkEmailVerificationStatus() -> AnyPublisher<Bool, Error>
+    func saveCredentials(email: String, password: String) -> Bool
+    func getCredentials() -> (email: String, password: String)?
 }
 
 enum AuthError: Error, LocalizedError {
@@ -23,6 +26,7 @@ enum AuthError: Error, LocalizedError {
     case serverError(String)
     case networkError
     case verificationError
+    case keychainError
     
     var errorDescription: String? {
         switch self {
@@ -42,12 +46,16 @@ enum AuthError: Error, LocalizedError {
             return "Network error. Please check your connection and try again."
         case .verificationError:
             return "Failed to verify email. Please try again later."
+        case .keychainError:
+            return "Failed to securely store or retrieve credentials."
         }
     }
 }
 
 class AuthenticationService: AuthenticationServiceProtocol {
     private let networkClient: NetworkClient
+    private var cancellables = Set<AnyCancellable>()
+
     
     init(networkClient: NetworkClient = NetworkClient(baseURLString: AppEnvironment.shared.apiBaseURL)) {
         self.networkClient = networkClient
@@ -69,6 +77,9 @@ class AuthenticationService: AuthenticationServiceProtocol {
                     promise(.failure(AuthError.userNotFound))
                     return
                 }
+                
+                // Save credentials on successful login
+                _ = self.saveCredentials(email: email, password: password)
                 
                 // Get Firebase ID token
                 firebaseUser.getIDToken { token, error in
@@ -128,7 +139,15 @@ class AuthenticationService: AuthenticationServiceProtocol {
                 guard let self = self else { return }
                 
                 if let error = error {
-                    print("Firebase create user error: \(error.localizedDescription)")
+                    // Get detailed Firebase error
+                    let nsError = error as NSError
+                    let errorCode = nsError.code
+                    let errorMessage = nsError.localizedDescription
+                    
+                    print("Firebase create user detailed error:")
+                    print("Code: \(errorCode)")
+                    print("Message: \(errorMessage)")
+                    
                     promise(.failure(AuthError.signUpError))
                     return
                 }
@@ -137,6 +156,12 @@ class AuthenticationService: AuthenticationServiceProtocol {
                     promise(.failure(AuthError.userNotFound))
                     return
                 }
+                
+                // Successfully created Firebase user
+                print("✅ Firebase Auth user created: \(firebaseUser.uid)")
+                
+                // Save credentials on successful signup
+                _ = self.saveCredentials(email: email, password: password)
                 
                 // Update display name if provided
                 let changeRequest = firebaseUser.createProfileChangeRequest()
@@ -149,20 +174,18 @@ class AuthenticationService: AuthenticationServiceProtocol {
                         print("Failed to update profile: \(error.localizedDescription)")
                     }
                     
-                    // Now create the user in our backend
+                    // Create user in backend database
                     let registerRequest = RegisterRequest(
                         email: email,
-                        password: password,
+                        password: "**REDACTED**", // Don't send actual password to backend
                         username: email.split(separator: "@").first?.lowercased() ?? email.lowercased(),
                         displayName: displayName ?? "User"
                     )
                     
-                    // Create a typed publisher variable
-                    let registrationPublisher: AnyPublisher<RegisterResponse, Error> =
-                        self.networkClient.post(endpoint: "api/v1/auth/register", body: registerRequest)
-                    
-                    registrationPublisher
-                        .map { response -> User in
+                    // API call to register in backend
+                    self.networkClient.post(endpoint: "api/v1/auth/register", body: registerRequest)
+                        .map { (response: RegisterResponse) -> User in
+                            print("✅ Backend registration successful: \(response.uid)")
                             return User(
                                 id: firebaseUser.uid,
                                 email: email,
@@ -170,9 +193,33 @@ class AuthenticationService: AuthenticationServiceProtocol {
                                 isEmailVerified: firebaseUser.isEmailVerified
                             )
                         }
+                        .catch { error -> AnyPublisher<User, Error> in
+                            // Check for specific errors
+                            if let networkError = error as? NetworkError,
+                               case .httpError(let statusCode) = networkError,
+                               statusCode == 409 {
+                                print("⚠️ Backend reports user already exists (409) - continuing anyway")
+                                // Even if our backend reports conflict, we still have a valid Firebase user
+                            } else {
+                                print("❌ Backend registration failed: \(error)")
+                            }
+                            
+                            // Always return success with Firebase user
+                            // since Firebase Auth is our source of truth
+                            return Just(User(
+                                id: firebaseUser.uid,
+                                email: email,
+                                displayName: displayName,
+                                isEmailVerified: firebaseUser.isEmailVerified
+                            ))
+                            .setFailureType(to: Error.self)
+                            .eraseToAnyPublisher()
+                        }
                         .sink(
                             receiveCompletion: { completion in
                                 if case let .failure(error) = completion {
+                                    // This shouldn't happen due to the catch above
+                                    print("❌ Unexpected error: \(error)")
                                     promise(.failure(error))
                                 }
                             },
@@ -180,10 +227,45 @@ class AuthenticationService: AuthenticationServiceProtocol {
                                 promise(.success(user))
                             }
                         )
-                        .store(in: &AppEnvironment.shared.cancellables)
+                        .store(in: &self.cancellables)
                 }
             }
         }.eraseToAnyPublisher()
+    }
+
+    // New helper method to separate concerns
+    private func createUserInDatabase(firebaseUser: FirebaseAuth.User, email: String, displayName: String?) -> AnyPublisher<User, Error> {
+        let registerRequest = RegisterRequest(
+            email: email,
+            password: "**REDACTED**", // Never send actual password to backend
+            username: email.split(separator: "@").first?.lowercased() ?? email.lowercased(),
+            displayName: displayName ?? "User"
+        )
+        
+        // Create a typed publisher variable
+        return networkClient.post(endpoint: "api/v1/auth/register", body: registerRequest)
+            .map { (response: RegisterResponse) -> User in
+                print("✅ Registration successful: \(response.uid)")
+                return User(
+                    id: firebaseUser.uid,
+                    email: email,
+                    displayName: displayName,
+                    isEmailVerified: firebaseUser.isEmailVerified
+                )
+            }
+            .catch { error -> AnyPublisher<User, Error> in
+                print("❌ Registration API error: \(error)")
+                // If our backend fails, still return a user based on Firebase auth
+                return Just(User(
+                    id: firebaseUser.uid,
+                    email: email,
+                    displayName: displayName,
+                    isEmailVerified: firebaseUser.isEmailVerified
+                ))
+                .setFailureType(to: Error.self)
+                .eraseToAnyPublisher()
+            }
+            .eraseToAnyPublisher()
     }
     
     func resetPassword(email: String) -> AnyPublisher<Void, Error> {
@@ -283,103 +365,84 @@ class AuthenticationService: AuthenticationServiceProtocol {
     }
     
     func sendSimpleEmailVerification() -> AnyPublisher<Void, Error> {
-            return Future<Void, Error> { promise in
-                guard let user = Auth.auth().currentUser else {
-                    promise(.failure(AuthError.userNotFound))
-                    return
+        return Future<Void, Error> { promise in
+            guard let user = Auth.auth().currentUser else {
+                promise(.failure(AuthError.userNotFound))
+                return
+            }
+            
+            // Use the basic method without custom ActionCodeSettings
+            user.sendEmailVerification { error in
+                if let error = error {
+                    print("Failed to send verification email: \(error.localizedDescription)")
+                    promise(.failure(error))
+                } else {
+                    print("✅ Verification email sent directly through Firebase")
+                    promise(.success(()))
                 }
-                
-                // Use the basic method without custom ActionCodeSettings
-                user.sendEmailVerification { error in
-                    if let error = error {
-                        print("Failed to send verification email: \(error.localizedDescription)")
-                        promise(.failure(error))
-                    } else {
-                        print("✅ Verification email sent directly through Firebase")
-                        promise(.success(()))
-                    }
-                }
-            }.eraseToAnyPublisher()
+            }
+        }.eraseToAnyPublisher()
+    }
+    
+    // MARK: - Keychain methods
+    
+    // Save credentials to keychain
+    func saveCredentials(email: String, password: String) -> Bool {
+        // Create dictionary of credentials
+        let credentials = [
+            "email": email,
+            "password": password
+        ]
+        
+        // Convert dictionary to data
+        guard let credentialsData = try? JSONSerialization.data(withJSONObject: credentials) else {
+            print("Failed to serialize credentials")
+            return false
         }
-}
-
-#if DEBUG
-extension AuthenticationService {
-    static func testAuthentication() {
-        let authService = AuthenticationService()
-        let email = "test@example.com"
-        let password = "password123"
         
-        print("🔑 Testing user registration...")
+        // Create keychain query
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.foodmap.credentials",
+            kSecAttrAccount as String: "foodMapUser",
+            kSecValueData as String: credentialsData,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
+        ]
         
-        authService.signUp(email: email, password: password, displayName: "Test User")
-            .sink(
-                receiveCompletion: { completion in
-                    if case let .failure(error) = completion {
-                        print("❌ Registration failed: \(error.localizedDescription)")
-                    }
-                },
-                receiveValue: { user in
-                    print("✅ Registration successful: \(user.id)")
-                    
-                    print("🔑 Testing login...")
-                    authService.login(email: email, password: password)
-                        .sink(
-                            receiveCompletion: { completion in
-                                if case let .failure(error) = completion {
-                                    print("❌ Login failed: \(error.localizedDescription)")
-                                }
-                            },
-                            receiveValue: { user in
-                                print("✅ Login successful: \(user.id)")
-                                
-                                print("🔑 Testing token retrieval...")
-                                authService.getIdToken()
-                                    .sink(
-                                        receiveCompletion: { completion in
-                                            if case let .failure(error) = completion {
-                                                print("❌ Token retrieval failed: \(error.localizedDescription)")
-                                            }
-                                        },
-                                        receiveValue: { token in
-                                            print("✅ Token retrieved: \(token.prefix(10))...")
-                                            
-                                            print("🔑 Testing verification email...")
-                                            authService.sendEmailVerification()
-                                                .sink(
-                                                    receiveCompletion: { completion in
-                                                        if case let .failure(error) = completion {
-                                                            print("❌ Send verification email failed: \(error.localizedDescription)")
-                                                        } else {
-                                                            print("✅ Verification email sent")
-                                                        }
-                                                        
-                                                        print("🔑 Testing sign out...")
-                                                        authService.signOut()
-                                                            .sink(
-                                                                receiveCompletion: { completion in
-                                                                    if case let .failure(error) = completion {
-                                                                        print("❌ Sign out failed: \(error.localizedDescription)")
-                                                                    } else {
-                                                                        print("✅ Sign out successful")
-                                                                    }
-                                                                },
-                                                                receiveValue: { _ in }
-                                                            )
-                                                            .store(in: &AppEnvironment.shared.cancellables)
-                                                    },
-                                                    receiveValue: { _ in }
-                                                )
-                                                .store(in: &AppEnvironment.shared.cancellables)
-                                        }
-                                    )
-                                    .store(in: &AppEnvironment.shared.cancellables)
-                            }
-                        )
-                        .store(in: &AppEnvironment.shared.cancellables)
-                }
-            )
-            .store(in: &AppEnvironment.shared.cancellables)
+        // Delete any existing credentials
+        SecItemDelete(query as CFDictionary)
+        
+        // Add new credentials
+        let status = SecItemAdd(query as CFDictionary, nil)
+        
+        // Return true if successful, false otherwise
+        return status == errSecSuccess
+    }
+    
+    // Get credentials from keychain
+    func getCredentials() -> (email: String, password: String)? {
+        // Create keychain query
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.foodmap.credentials",
+            kSecAttrAccount as String: "foodMapUser",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        // Execute query
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        // Check if query was successful
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let credentials = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+              let email = credentials["email"],
+              let password = credentials["password"] else {
+            return nil
+        }
+        
+        return (email, password)
     }
 }
-#endif

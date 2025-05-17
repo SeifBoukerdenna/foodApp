@@ -7,14 +7,14 @@
 
 import SwiftUI
 import Combine
+import AuthenticationServices
 
 struct LoginView: View {
     // ── State ─────────────────────────────────────────────────────────────
     @Binding var showLogin: Bool
     var onLogin: ((String) -> Void)?
     
-    @State private var email = ""
-    @State private var password = ""
+    @State private var rememberCredentials = true
     @State private var kbHeight: CGFloat = 0
     @FocusState private var focus: Field?
     @EnvironmentObject private var viewModel: AuthViewModel
@@ -71,31 +71,46 @@ struct LoginView: View {
                     Spacer().frame(height: 32 - bubbleOverlap)
 
                     // 📧 / 🔒
-                    PlaceholderField("E-mail", text: $email)
+                    PlaceholderField("E-mail", text: $viewModel.email)
                         .focused($focus, equals: .email)
                         .padding(.bottom, 12)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("emailField")
 
-                    PlaceholderField("Password", text: $password, secure: true)
+                    PlaceholderField("Password", text: $viewModel.password, secure: true)
                         .focused($focus, equals: .password)
                         .padding(.bottom, 8)
+                        .textContentType(.password)
 
+                    // Save credentials toggle
+                    Toggle("Remember me", isOn: $rememberCredentials)
+                        .foregroundColor(.white)
+                        .font(.system(size: 14))
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 4)
+                        .tint(Color.brandRed)
+                                
                     // 🔑 Forgot password
                     HStack {
                         Spacer()
                         Button("Forgot your password?") {
-                            viewModel.email = email
                             viewModel.forgotPassword()
                         }
                             .font(.system(size: 14))
                             .foregroundColor(.white)
                     }
                     .padding(.trailing, 4)
+                    .padding(.top, 8)
                     .padding(.bottom, 16)
 
                     // ▶︎ Log In
                     PrimaryButton(title: "Log In") {
-                        viewModel.email = email
-                        viewModel.password = password
+                        if rememberCredentials {
+                            let _ = (viewModel.authService as? AuthenticationService)?.saveCredentials(email: viewModel.email, password: viewModel.password)
+                        }
                         viewModel.login()
                     }
                     .disabled(viewModel.isLoading)
@@ -160,7 +175,7 @@ struct LoginView: View {
                 Color.clear.frame(height: kbHeight)
             }
         }
-        .onChange(of: viewModel.isAuthenticated) { newValue in
+        .onChange(of: viewModel.isAuthenticated) { oldValue, newValue in
             if newValue {
                 // Complete login and navigate to home
                 if let user = viewModel.user {

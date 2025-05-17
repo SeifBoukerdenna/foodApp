@@ -6,11 +6,13 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 struct OnboardingContainer: View {
     // MARK: - Properties
     @State private var currentStep: OnboardingStep = .displayName
     @State private var displayName: String = ""
+    @EnvironmentObject var authViewModel: AuthViewModel
     
     enum OnboardingStep {
         case displayName
@@ -30,7 +32,10 @@ struct OnboardingContainer: View {
             case .displayName:
                 DisplayNameView(
                     displayName: $displayName,
-                    onConfirm: { currentStep = .confirmName }
+                    onConfirm: {
+                        updateUserDisplayName()
+                        currentStep = .confirmName
+                    }
                 )
                 
             case .confirmName:
@@ -48,6 +53,32 @@ struct OnboardingContainer: View {
                 
             case .home:
                 HomeView(displayName: displayName)
+                    .environmentObject(authViewModel)
+            }
+        }
+    }
+    
+    // Update the user's display name in Firebase
+    private func updateUserDisplayName() {
+        guard let user = Auth.auth().currentUser else {
+            print("❌ No authenticated user found")
+            return
+        }
+        
+        let changeRequest = user.createProfileChangeRequest()
+        changeRequest.displayName = displayName
+        
+        changeRequest.commitChanges { error in
+            if let error = error {
+                print("❌ Failed to update display name: \(error.localizedDescription)")
+            } else {
+                print("✅ Display name updated successfully: \(displayName)")
+                
+                // Update the user in our view model
+                if var currentUser = authViewModel.user {
+                    currentUser.displayName = displayName
+                    authViewModel.user = currentUser
+                }
             }
         }
     }
@@ -57,5 +88,6 @@ struct OnboardingContainer: View {
 struct OnboardingContainer_Previews: PreviewProvider {
     static var previews: some View {
         OnboardingContainer()
+            .environmentObject(AuthViewModel())
     }
 }

@@ -205,7 +205,7 @@ struct HomeView: View {
             // Content
             if viewModel.isLoading {
                 loadingView
-            } else if let errorMessage = viewModel.errorMessage {
+            } else if viewModel.errorMessage != nil {
                 errorView
             } else {
                 suggestionsView
