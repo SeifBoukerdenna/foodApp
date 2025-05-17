@@ -2,7 +2,7 @@
 //  LoginView.swift
 //  FoodMap
 //
-//  Pixel-perfect Figma implementation – v4
+//  Login screen with email verification support
 //
 
 import SwiftUI
@@ -17,7 +17,8 @@ struct LoginView: View {
     @State private var password = ""
     @State private var kbHeight: CGFloat = 0
     @FocusState private var focus: Field?
-    @StateObject private var viewModel = AuthViewModel()
+    @EnvironmentObject private var viewModel: AuthViewModel
+    
     private enum Field { case email, password }
 
     // How much the speech-bubble climbs up so it "kisses" the penguin
@@ -106,6 +107,13 @@ struct LoginView: View {
                             .font(.system(size: 14))
                             .padding(.top, 8)
                     }
+                    
+                    // Loading indicator
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .padding(.top, 12)
+                    }
 
                     // Divider
                     HStack {
@@ -178,5 +186,12 @@ struct LoginView: View {
                 .publisher(for: UIResponder.keyboardWillHideNotification)
                 .map { _ in CGFloat(0) }
         ).eraseToAnyPublisher()
+    }
+}
+
+struct LoginView_Previews: PreviewProvider {
+    static var previews: some View {
+        LoginView(showLogin: .constant(true))
+            .environmentObject(AuthViewModel())
     }
 }

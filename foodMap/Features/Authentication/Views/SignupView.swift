@@ -2,7 +2,7 @@
 //  SignUpView.swift
 //  FoodMap
 //
-//  Sign up screen for user authentication
+//  Sign up screen for user authentication - updated with verification flow
 //
 
 import SwiftUI
@@ -18,7 +18,7 @@ struct SignUpView: View {
     @State private var password = ""
     @State private var kbHeight: CGFloat = 0
     @FocusState private var focus: Field?
-    @StateObject private var viewModel = AuthViewModel()
+    @EnvironmentObject private var viewModel: AuthViewModel
     
     // MARK: - Types
     private enum Field {
@@ -103,6 +103,13 @@ struct SignUpView: View {
                             .padding(.top, 8)
                     }
 
+                    // Loading indicator
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .padding(.top, 12)
+                    }
+
                     // Divider
                     HStack {
                         divider
@@ -174,5 +181,12 @@ struct SignUpView: View {
                 .publisher(for: UIResponder.keyboardWillHideNotification)
                 .map { _ in CGFloat(0) }
         ).eraseToAnyPublisher()
+    }
+}
+
+struct SignUpView_Previews: PreviewProvider {
+    static var previews: some View {
+        SignUpView(showLogin: .constant(false))
+            .environmentObject(AuthViewModel())
     }
 }

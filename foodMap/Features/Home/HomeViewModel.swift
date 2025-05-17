@@ -1,6 +1,6 @@
-
 import Foundation
 import Combine
+import FirebaseAuth
 
 class HomeViewModel: ObservableObject {
     // MARK: - Published Properties
@@ -42,7 +42,14 @@ class HomeViewModel: ObservableObject {
                             
                             // Format error message for display
                             if let networkError = error as? NetworkError {
-                                self.errorMessage = networkError.localizedDescription
+                                switch networkError {
+                                case .authenticationRequired:
+                                    self.errorMessage = "Login required. Please sign in again."
+                                case .tokenExpired:
+                                    self.errorMessage = "Your session has expired. Please sign in again."
+                                default:
+                                    self.errorMessage = networkError.localizedDescription
+                                }
                             } else {
                                 self.errorMessage = "The operation couldn't be completed."
                             }
@@ -80,4 +87,22 @@ class HomeViewModel: ObservableObject {
         
         getRestaurantSuggestions(preferences: preferences)
     }
-} 
+    
+    func retryWithAuthentication() {
+        // First check if we're authenticated
+        if let user = Auth.auth().currentUser {
+            // If we already have a user, try to get a fresh token
+            user.getIDToken(completion: { token, error in
+                if error == nil && token != nil {
+                    // Token refreshed, try the request again
+                    self.getDefaultSuggestions()
+                } else {
+                    // Display auth error
+                    self.errorMessage = "Authentication error. Please log out and try again."
+                }
+            })
+        } else {
+            self.errorMessage = "Please sign in to continue."
+        }
+    }
+}

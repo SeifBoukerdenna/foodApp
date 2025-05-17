@@ -11,6 +11,7 @@ struct HomeView: View {
         center: CLLocationCoordinate2D(latitude: 45.5741, longitude: -73.6921), // Laval coordinates
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
     )
+    @EnvironmentObject var authViewModel: AuthViewModel
     
     // MARK: - Body
     var body: some View {
@@ -22,6 +23,11 @@ struct HomeView: View {
             
             // Main content
             VStack(spacing: 0) {
+                // Verification Status Banner (if needed)
+                if let user = authViewModel.user, !user.isEmailVerified {
+                    VerificationStatusView(viewModel: authViewModel)
+                }
+                
                 // Header with search
                 VStack(spacing: 16) {
                     // Spacer for status bar
@@ -36,21 +42,16 @@ struct HomeView: View {
                 // Always show the container, just change its content
                 suggestionsContainerView
             }
-            
-            // Tab bar at bottom
-            VStack {
-                Spacer()
-                tabBarView
-            }
         }
         .ignoresSafeArea(.keyboard)
         .preferredColorScheme(.dark)
         .onAppear {
+            // Check email verification status when view appears
+            authViewModel.checkEmailVerificationStatus()
+            
             // Load suggestions after a small delay to avoid state updates during view render
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                if viewModel.suggestedRestaurants.isEmpty && viewModel.errorMessage == nil {
-                    viewModel.getDefaultSuggestions()
-                }
+                viewModel.getDefaultSuggestions()
             }
         }
         .sheet(isPresented: $showPreferencesSheet) {
@@ -215,7 +216,7 @@ struct HomeView: View {
             Text("😕")
                 .font(.system(size: 40))
             
-            Text("Error: The operation couldn't be completed. (foodMap.NetworkError error 2.)")
+            Text(viewModel.errorMessage ?? "Error: The operation couldn't be completed.")
                 .font(.body)
                 .foregroundColor(.red.opacity(0.8))
                 .multilineTextAlignment(.center)
@@ -288,54 +289,6 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white.opacity(0.1))
         .cornerRadius(10)
-    }
-    
-    // MARK: - Tab Bar View
-    private var tabBarView: some View {
-        HStack(spacing: 0) {
-            // Tab buttons
-            tabButton(icon: "house.fill", title: "Home", isSelected: true)
-            tabButton(icon: "person.2.fill", title: "Friends", isSelected: false)
-            
-            // Center button
-            ZStack {
-                Circle()
-                    .fill(Color.brandRed)
-                    .frame(width: 56, height: 56)
-                    .overlay(
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundColor(.white)
-                    )
-                    .offset(y: -15)
-            }
-            .frame(width: UIScreen.main.bounds.width / 5)
-            
-            tabButton(icon: "cart.fill", title: "Cart", isSelected: false)
-            tabButton(icon: "person.crop.circle.fill", title: "Profile", isSelected: false)
-        }
-        .frame(height: 49)
-        .padding(.top, 8)
-        .padding(.bottom, 28) // Safe area padding
-        .background(
-            Color.brandRed
-                .cornerRadius(25, corners: [.topLeft, .topRight])
-                .edgesIgnoringSafeArea(.bottom)
-        )
-    }
-    
-    private func tabButton(icon: String, title: String, isSelected: Bool) -> some View {
-        Button(action: {}) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 22))
-                
-                Text(title)
-                    .font(.system(size: 12))
-            }
-            .foregroundColor(isSelected ? .white : .white.opacity(0.7))
-            .frame(maxWidth: .infinity)
-        }
     }
     
     // MARK: - Helper Methods
@@ -582,26 +535,9 @@ struct PreferencesSheet: View {
     }
 }
 
-// MARK: - Extensions
-extension View {
-    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
-        clipShape(RoundedCorner(radius: radius, corners: corners))
-    }
-}
-
-struct RoundedCorner: Shape {
-    var radius: CGFloat = .infinity
-    var corners: UIRectCorner = .allCorners
-    
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
-        return Path(path.cgPath)
-    }
-}
-
-// MARK: - Preview
 struct HomeView_Previews: PreviewProvider {
     static var previews: some View {
         HomeView(displayName: "JjaJ")
+            .environmentObject(AuthViewModel())
     }
 }
