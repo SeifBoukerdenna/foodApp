@@ -17,6 +17,7 @@ struct LoginView: View {
     @State private var password = ""
     @State private var kbHeight: CGFloat = 0
     @FocusState private var focus: Field?
+    @StateObject private var viewModel = AuthViewModel()
     private enum Field { case email, password }
 
     // How much the speech-bubble climbs up so it "kisses" the penguin
@@ -80,7 +81,10 @@ struct LoginView: View {
                     // 🔑 Forgot password
                     HStack {
                         Spacer()
-                        Button("Forgot your password?") { /* TODO */ }
+                        Button("Forgot your password?") {
+                            viewModel.email = email
+                            viewModel.forgotPassword()
+                        }
                             .font(.system(size: 14))
                             .foregroundColor(.white)
                     }
@@ -89,11 +93,18 @@ struct LoginView: View {
 
                     // ▶︎ Log In
                     PrimaryButton(title: "Log In") {
-                        // Call the onLogin closure with the email or username
-                        if !email.isEmpty {
-                            let displayName = email.split(separator: "@").first.map(String.init) ?? email
-                            onLogin?(displayName)
-                        }
+                        viewModel.email = email
+                        viewModel.password = password
+                        viewModel.login()
+                    }
+                    .disabled(viewModel.isLoading)
+
+                    // Display error message if there is one
+                    if !viewModel.errorMessage.isEmpty {
+                        Text(viewModel.errorMessage)
+                            .foregroundColor(.red)
+                            .font(.system(size: 14))
+                            .padding(.top, 8)
                     }
 
                     // Divider
@@ -108,8 +119,7 @@ struct LoginView: View {
 
                     // Google
                     Button {
-                        // Simple demo login
-                        onLogin?("Guest User")
+                        viewModel.signInWithGoogle()
                     } label: {
                         Image("google_icon")
                             .resizable()
@@ -142,6 +152,14 @@ struct LoginView: View {
                 Color.clear.frame(height: kbHeight)
             }
         }
+        .onChange(of: viewModel.isAuthenticated) { newValue in
+            if newValue {
+                // Complete login and navigate to home
+                if let user = viewModel.user {
+                    onLogin?(user.displayName ?? "User")
+                }
+            }
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -162,14 +180,3 @@ struct LoginView: View {
         ).eraseToAnyPublisher()
     }
 }
-
-
-// MARK: - Hide keyboard helper
-#if canImport(UIKit)
-extension View {
-    func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
-                                        to: nil, from: nil, for: nil)
-    }
-}
-#endif

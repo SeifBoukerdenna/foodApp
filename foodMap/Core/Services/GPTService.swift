@@ -37,10 +37,19 @@ class GPTService: GPTServiceProtocol {
         
         print("Restaurant suggestion request: \(request)")
         
-        return networkClient.post(endpoint: AppEnvironment.Endpoints.restaurantSuggestions, body: request)
+        // Use the requiresAuth parameter
+        return networkClient.post(
+            endpoint: AppEnvironment.Endpoints.restaurantSuggestions,
+            body: request,
+            requiresAuth: true // Require authentication
+        )
     }
     
     func getChatCompletion(request: ChatCompletionRequest) -> AnyPublisher<ChatCompletionResponse, Error> {
-        return networkClient.post(endpoint: AppEnvironment.Endpoints.chatCompletion, body: request)
+        return networkClient.post(
+            endpoint: AppEnvironment.Endpoints.chatCompletion,
+            body: request,
+            requiresAuth: true  // Require authentication
+        )
     }
 }

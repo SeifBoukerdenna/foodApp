@@ -18,6 +18,7 @@ struct SignUpView: View {
     @State private var password = ""
     @State private var kbHeight: CGFloat = 0
     @FocusState private var focus: Field?
+    @StateObject private var viewModel = AuthViewModel()
     
     // MARK: - Types
     private enum Field {
@@ -86,13 +87,20 @@ struct SignUpView: View {
 
                     // Sign Up button
                     PrimaryButton(title: "Sign Up") {
-                        // Complete signup and navigate to home
-                        if !username.isEmpty {
-                            onSignUp?(username)
-                        } else if !email.isEmpty {
-                            let displayName = email.split(separator: "@").first.map(String.init) ?? email
-                            onSignUp?(displayName)
-                        }
+                        viewModel.email = email
+                        viewModel.password = password
+                        viewModel.username = username
+                        viewModel.displayName = username // Use username as display name if none provided
+                        viewModel.signUp()
+                    }
+                    .disabled(viewModel.isLoading)
+
+                    // Display error message if there is one
+                    if !viewModel.errorMessage.isEmpty {
+                        Text(viewModel.errorMessage)
+                            .foregroundColor(.red)
+                            .font(.system(size: 14))
+                            .padding(.top, 8)
                     }
 
                     // Divider
@@ -107,8 +115,7 @@ struct SignUpView: View {
 
                     // Google
                     Button {
-                        // Simple demo signup
-                        onSignUp?("Guest User")
+                        viewModel.signInWithGoogle()
                     } label: {
                         Image("google_icon")
                             .resizable()
@@ -141,6 +148,14 @@ struct SignUpView: View {
                 Color.clear.frame(height: kbHeight)
             }
         }
+        .onChange(of: viewModel.isAuthenticated) { newValue in
+            if newValue {
+                // Complete signup and navigate to home
+                if let user = viewModel.user {
+                    onSignUp?(user.displayName ?? username)
+                }
+            }
+        }
     }
     
     // MARK: - Helpers
@@ -159,12 +174,5 @@ struct SignUpView: View {
                 .publisher(for: UIResponder.keyboardWillHideNotification)
                 .map { _ in CGFloat(0) }
         ).eraseToAnyPublisher()
-    }
-}
-
-// MARK: - Preview
-struct SignUpView_Previews: PreviewProvider {
-    static var previews: some View {
-        SignUpView(showLogin: .constant(false))
     }
 }

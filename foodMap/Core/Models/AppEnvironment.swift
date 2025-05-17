@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// Central environment configuration for the app
 class AppEnvironment: ObservableObject {
@@ -11,6 +12,9 @@ class AppEnvironment: ObservableObject {
     // MARK: - App Configuration
     @Published var hasCompletedOnboarding = false
     @Published var currentUserId: String
+    
+    // Add a cancellables property for Combine
+    var cancellables = Set<AnyCancellable>()
     
     private init() {
         // Configure API URL
@@ -40,6 +44,15 @@ class AppEnvironment: ObservableObject {
     func updateUserId(_ userId: String) {
         self.currentUserId = userId
         UserDefaults.standard.set(userId, forKey: "userId")
+    }
+    
+    // Add a new method for token headers
+    func getAuthHeaders() -> AnyPublisher<[String: String], Error> {
+        return AuthenticationService().getIdToken()
+            .map { token in
+                return ["Authorization": "Firebase \(token)"]
+            }
+            .eraseToAnyPublisher()
     }
 }
 
