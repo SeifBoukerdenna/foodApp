@@ -12,6 +12,7 @@ struct HomeView: View {
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
     )
     @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var showLogoutConfirmation = false
     
     // MARK: - Body
     var body: some View {
@@ -28,13 +29,32 @@ struct HomeView: View {
                     VerificationStatusView(viewModel: authViewModel)
                 }
                 
-                // Header with search
+                // Header with search and logout button
                 VStack(spacing: 16) {
                     // Spacer for status bar
                     Spacer().frame(height: 44)
                     
-                    // Search bar
-                    searchBarView
+                    // Search bar and logout button
+                    HStack(spacing: 12) {
+                        // Search bar (takes most of the space)
+                        searchBarView
+                        
+                        // Logout button
+                        Button(action: {
+                            showLogoutConfirmation = true
+                        }) {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 20))
+                                .foregroundColor(.white)
+                                .padding(12)
+                                .background(
+                                    Circle()
+                                        .fill(Color.brandRed)
+                                        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                                )
+                        }
+                    }
+                    .padding(.horizontal, 16)
                 }
                 
                 Spacer()
@@ -59,6 +79,16 @@ struct HomeView: View {
                 viewModel.getRestaurantSuggestions(preferences: preferences)
             }
         }
+        .alert(isPresented: $showLogoutConfirmation) {
+            Alert(
+                title: Text("Log Out"),
+                message: Text("Are you sure you want to log out?"),
+                primaryButton: .destructive(Text("Log Out")) {
+                    authViewModel.signOut()
+                },
+                secondaryButton: .cancel()
+            )
+        }
     }
     
     // MARK: - Search Bar View
@@ -82,7 +112,6 @@ struct HomeView: View {
             }
             .padding(.horizontal, 16)
         }
-        .padding(.horizontal, 16)
     }
     
     // MARK: - Suggestions Container
@@ -532,12 +561,5 @@ struct PreferencesSheet: View {
         
         onSubmit(preferences)
         isPresented = false
-    }
-}
-
-struct HomeView_Previews: PreviewProvider {
-    static var previews: some View {
-        HomeView(displayName: "JjaJ")
-            .environmentObject(AuthViewModel())
     }
 }

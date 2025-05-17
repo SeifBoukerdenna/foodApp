@@ -10,11 +10,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // Configure Firebase
     FirebaseApp.configure()
     
-    // Disable App Check in development to avoid the errors
-    #if DEBUG
-    let providerFactory = AppCheckDebugProviderFactory()
-    AppCheck.setAppCheckProviderFactory(providerFactory)
-    #endif
+    // Use DeviceCheck for both development and production on real devices
+    let deviceCheckProvider = DeviceCheckProviderFactory()
+    AppCheck.setAppCheckProviderFactory(deviceCheckProvider)
+    print("✅ Using DeviceCheck provider for App Check")
 
     return true
   }
@@ -48,6 +47,8 @@ struct FoodMapApp: App {
         // Print app info
         #if DEBUG
         print("FoodMap app started in debug mode")
+        // Verify App Check is working
+        verifyAppCheckToken()
         #else
         print("FoodMap app started in release mode")
         #endif
@@ -57,5 +58,18 @@ struct FoodMapApp: App {
     private func configureKeyboardSettings() {
         // This disables automatic keyboard scrolling adjustment which causes layout issues
         UIScrollView.appearance().keyboardDismissMode = .interactive
+    }
+    
+    // Test that App Check is working
+    private func verifyAppCheckToken() {
+        AppCheck.appCheck().token(forcingRefresh: true) { token, error in
+            if let error = error {
+                print("❌ App Check error: \(error.localizedDescription)")
+                print("⚠️ App will continue without App Check")
+            } else if let token = token {
+                print("✅ App Check token successfully generated: \(token.token.prefix(15))...")
+                print("✅ Token expires: \(token.expirationDate)")
+            }
+        }
     }
 }

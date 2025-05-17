@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import FirebaseAuth
+import FirebaseAppCheck
 
 enum NetworkError: Error, LocalizedError {
     case invalidURL
@@ -10,6 +11,7 @@ enum NetworkError: Error, LocalizedError {
     case unknown(Error)
     case authenticationRequired
     case tokenExpired
+    case appCheckError
     
     var errorDescription: String? {
         switch self {
@@ -27,6 +29,8 @@ enum NetworkError: Error, LocalizedError {
             return "Authentication is required"
         case .tokenExpired:
             return "Authentication token expired, please login again"
+        case .appCheckError:
+            return "App verification failed - please try again later"
         }
     }
 }
@@ -37,12 +41,13 @@ class NetworkClient {
     private let session: URLSession
     private var authToken: String?
     private var tokenExpirationDate: Date?
+    private var appCheckToken: String?
+    private var appCheckTokenExpiration: Date?
     
     // MARK: - Initializer
     init(baseURLString: String, session: URLSession = .shared) {
         self.baseURL = baseURLString
         self.session = session
-        
         print("NetworkClient initialized with base URL: \(baseURL)")
     }
     
@@ -53,27 +58,44 @@ class NetworkClient {
         }
         
         if requiresAuth {
-            return getValidAuthToken()
-                .flatMap { token -> AnyPublisher<T, Error> in
+            return Publishers.Zip(
+                getValidAuthToken(),
+                getValidAppCheckToken()
+            )
+            .flatMap { authToken, appCheckToken -> AnyPublisher<T, Error> in
+                var request = URLRequest(url: url)
+                request.httpMethod = "GET"
+                request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+                
+                // Add auth token
+                request.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+                
+                // Add App Check token
+                request.addValue(appCheckToken, forHTTPHeaderField: "X-Firebase-AppCheck")
+                
+                print("GET request to: \(url.absoluteString)")
+                print("With auth token: \(authToken.prefix(15))...")
+                print("With App Check token: \(appCheckToken.prefix(15))...")
+                
+                return self.executeRequest(request)
+            }
+            .eraseToAnyPublisher()
+        } else {
+            return getValidAppCheckToken()
+                .flatMap { appCheckToken -> AnyPublisher<T, Error> in
                     var request = URLRequest(url: url)
                     request.httpMethod = "GET"
                     request.addValue("application/json", forHTTPHeaderField: "Content-Type")
                     
-                    // Add auth token
-                    request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    // Add App Check token even for non-auth requests
+                    request.addValue(appCheckToken, forHTTPHeaderField: "X-Firebase-AppCheck")
                     
                     print("GET request to: \(url.absoluteString)")
-                    print("With token: \(token.prefix(15))...")
+                    print("With App Check token: \(appCheckToken.prefix(15))...")
+                    
                     return self.executeRequest(request)
                 }
                 .eraseToAnyPublisher()
-        } else {
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-            
-            print("GET request to: \(url.absoluteString)")
-            return executeRequest(request)
         }
     }
     
@@ -84,17 +106,80 @@ class NetworkClient {
         }
         
         if requiresAuth {
-            // Get auth token before making the request
-            return getValidAuthToken()
-                .flatMap { token -> AnyPublisher<T, Error> in
+            // Get both auth token and App Check token before making the request
+            return Publishers.Zip(
+                getValidAuthToken(),
+                getValidAppCheckToken()
+            )
+            .flatMap { authToken, appCheckToken -> AnyPublisher<T, Error> in
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.addValue("application/json", forHTTPHeaderField: "Accept")
+                
+                // Add auth token
+                request.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+                
+                // Add App Check token
+                request.addValue(appCheckToken, forHTTPHeaderField: "X-Firebase-AppCheck")
+                
+                print("Using auth token: \(authToken.prefix(15))...")
+                print("Using App Check token: \(appCheckToken.prefix(15))...")
+                
+                do {
+                    let encoder = JSONEncoder()
+                    let jsonData = try encoder.encode(body)
+                    request.httpBody = jsonData
+                    
+                    if let jsonString = String(data: jsonData, encoding: .utf8) {
+                        print("📤 POST request to: \(url.absoluteString)")
+                        print("📦 Request body: \(jsonString)")
+                    }
+                } catch {
+                    print("❌ Error encoding request body: \(error)")
+                    return Fail(error: error).eraseToAnyPublisher()
+                }
+                
+                return self.executeRequest(request)
+                    .tryCatch { error -> AnyPublisher<T, Error> in
+                        // If token expired, try refreshing both tokens and retry
+                        if case NetworkError.httpError(401) = error {
+                            print("⚠️ Token expired, refreshing and retrying")
+                            self.authToken = nil
+                            self.tokenExpirationDate = nil
+                            self.appCheckToken = nil
+                            self.appCheckTokenExpiration = nil
+                            
+                            return Publishers.Zip(
+                                self.refreshAuthToken(),
+                                self.refreshAppCheckToken()
+                            )
+                            .flatMap { newAuthToken, newAppCheckToken -> AnyPublisher<T, Error> in
+                                var newRequest = request
+                                newRequest.setValue("Bearer \(newAuthToken)", forHTTPHeaderField: "Authorization")
+                                newRequest.setValue(newAppCheckToken, forHTTPHeaderField: "X-Firebase-AppCheck")
+                                return self.executeRequest(newRequest)
+                            }
+                            .eraseToAnyPublisher()
+                        }
+                        throw error
+                    }
+                    .eraseToAnyPublisher()
+            }
+            .eraseToAnyPublisher()
+        } else {
+            // For non-auth requests, still use App Check
+            return getValidAppCheckToken()
+                .flatMap { appCheckToken -> AnyPublisher<T, Error> in
                     var request = URLRequest(url: url)
                     request.httpMethod = "POST"
                     request.addValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.addValue("application/json", forHTTPHeaderField: "Accept")
                     
-                    // Add auth token
-                    request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                    print("Using token: \(token.prefix(15))...")
+                    // Add App Check token even for non-auth requests
+                    request.addValue(appCheckToken, forHTTPHeaderField: "X-Firebase-AppCheck")
+                    
+                    print("Using App Check token: \(appCheckToken.prefix(15))...")
                     
                     do {
                         let encoder = JSONEncoder()
@@ -112,16 +197,28 @@ class NetworkClient {
                     
                     return self.executeRequest(request)
                         .tryCatch { error -> AnyPublisher<T, Error> in
-                            // If token expired, try getting a new token and retry
+                            // Fixed: Separate if cases for different error codes
                             if case NetworkError.httpError(401) = error {
-                                print("⚠️ Token expired, refreshing and retrying")
-                                self.authToken = nil
-                                self.tokenExpirationDate = nil
+                                print("⚠️ App Check token may be invalid (401), refreshing and retrying")
+                                self.appCheckToken = nil
+                                self.appCheckTokenExpiration = nil
                                 
-                                return self.getValidAuthToken()
-                                    .flatMap { newToken -> AnyPublisher<T, Error> in
+                                return self.refreshAppCheckToken()
+                                    .flatMap { newAppCheckToken -> AnyPublisher<T, Error> in
                                         var newRequest = request
-                                        newRequest.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+                                        newRequest.setValue(newAppCheckToken, forHTTPHeaderField: "X-Firebase-AppCheck")
+                                        return self.executeRequest(newRequest)
+                                    }
+                                    .eraseToAnyPublisher()
+                            } else if case NetworkError.httpError(403) = error {
+                                print("⚠️ App Check token may be invalid (403), refreshing and retrying")
+                                self.appCheckToken = nil
+                                self.appCheckTokenExpiration = nil
+                                
+                                return self.refreshAppCheckToken()
+                                    .flatMap { newAppCheckToken -> AnyPublisher<T, Error> in
+                                        var newRequest = request
+                                        newRequest.setValue(newAppCheckToken, forHTTPHeaderField: "X-Firebase-AppCheck")
                                         return self.executeRequest(newRequest)
                                     }
                                     .eraseToAnyPublisher()
@@ -131,28 +228,6 @@ class NetworkClient {
                         .eraseToAnyPublisher()
                 }
                 .eraseToAnyPublisher()
-        } else {
-            // Original implementation without auth
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.addValue("application/json", forHTTPHeaderField: "Accept")
-            
-            do {
-                let encoder = JSONEncoder()
-                let jsonData = try encoder.encode(body)
-                request.httpBody = jsonData
-                
-                if let jsonString = String(data: jsonData, encoding: .utf8) {
-                    print("📤 POST request to: \(url.absoluteString)")
-                    print("📦 Request body: \(jsonString)")
-                }
-            } catch {
-                print("❌ Error encoding request body: \(error)")
-                return Fail(error: error).eraseToAnyPublisher()
-            }
-            
-            return executeRequest(request)
         }
     }
     
@@ -174,6 +249,11 @@ class NetworkClient {
                 if httpResponse.statusCode == 401 {
                     print("❌ Authentication required or token expired")
                     throw NetworkError.httpError(401)
+                }
+                
+                if httpResponse.statusCode == 403 {
+                    print("❌ App Check verification failed")
+                    throw NetworkError.httpError(403)
                 }
                 
                 guard (200...299).contains(httpResponse.statusCode) else {
@@ -200,7 +280,7 @@ class NetworkClient {
     private func getValidAuthToken() -> AnyPublisher<String, Error> {
         // If we have a non-expired token, use it
         if let token = authToken, let expiration = tokenExpirationDate, expiration > Date() {
-            print("✅ Using cached token, expires: \(expiration)")
+            print("✅ Using cached auth token, expires: \(expiration)")
             return Just(token)
                 .setFailureType(to: Error.self)
                 .eraseToAnyPublisher()
@@ -239,6 +319,48 @@ class NetworkClient {
                 
                 print("✅ Successfully retrieved fresh auth token")
                 promise(.success(token))
+            }
+        }.eraseToAnyPublisher()
+    }
+    
+    // Get a valid App Check token (either cached or fresh)
+    private func getValidAppCheckToken() -> AnyPublisher<String, Error> {
+        // If we have a non-expired App Check token, use it
+        if let token = appCheckToken, let expiration = appCheckTokenExpiration, expiration > Date() {
+            print("✅ Using cached App Check token, expires: \(expiration)")
+            return Just(token)
+                .setFailureType(to: Error.self)
+                .eraseToAnyPublisher()
+        }
+        
+        // Otherwise, get a fresh App Check token
+        return refreshAppCheckToken()
+    }
+    
+    // Get a fresh App Check token
+    private func refreshAppCheckToken() -> AnyPublisher<String, Error> {
+        return Future<String, Error> { promise in
+            AppCheck.appCheck().token(forcingRefresh: true) { token, error in
+                if let error = error {
+                    print("❌ Failed to get App Check token: \(error.localizedDescription)")
+                    promise(.failure(NetworkError.appCheckError))
+                    return
+                }
+                
+                guard let token = token else {
+                    print("❌ App Check token is nil")
+                    promise(.failure(NetworkError.appCheckError))
+                    return
+                }
+                
+                // Cache the App Check token with its expiration
+                self.appCheckToken = token.token
+                self.appCheckTokenExpiration = token.expirationDate
+                
+                print("✅ Successfully retrieved fresh App Check token")
+                print("✅ App Check token expires: \(token.expirationDate)")
+                
+                promise(.success(token.token))
             }
         }.eraseToAnyPublisher()
     }
