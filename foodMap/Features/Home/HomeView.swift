@@ -13,6 +13,7 @@ struct HomeView: View {
     // MARK: - Properties
     let displayName: String
     @StateObject private var viewModel = HomeViewModel()
+    @StateObject private var mapViewModel = MapViewModel() // Add MapViewModel for search
     @State private var showPreferencesSheet = false
     @State private var searchText = ""
     @State private var cameraPosition = MapCameraPosition.region(
@@ -23,6 +24,9 @@ struct HomeView: View {
     )
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var showLogoutConfirmation = false
+    @State private var showSearchResults = false // Add state for search results
+    @State private var selectedPlace: PlaceResult? // Add selected place state
+    @State private var showDirectionsSheet = false // Add directions sheet state
     
     var body: some View {
         ZStack {
@@ -53,13 +57,29 @@ struct HomeView: View {
                 }
                 
                 Spacer()
-                suggestionsContainerView
+                
+                // Show search results or suggestions container
+                if showSearchResults && !mapViewModel.searchResults.isEmpty {
+                    searchResultsView
+                } else {
+                    suggestionsContainerView
+                }
+            }
+        }
+        .sheet(isPresented: $showDirectionsSheet) {
+            if let place = selectedPlace {
+                DirectionsSheet(
+                    place: place,
+                    mapViewModel: mapViewModel,
+                    isPresented: $showDirectionsSheet
+                )
             }
         }
         .ignoresSafeArea(.keyboard)
         .preferredColorScheme(.dark)
         .onAppear {
             authViewModel.checkEmailVerificationStatus()
+            mapViewModel.startLocationServices() // Start location services
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 viewModel.getDefaultSuggestions()
             }
@@ -77,6 +97,26 @@ struct HomeView: View {
                 secondaryButton: .cancel()
             )
         }
+        .onChange(of: searchText) { oldValue, newValue in
+            if newValue.isEmpty {
+                showSearchResults = false
+                mapViewModel.clearSearchResults()
+            } else {
+                // Debounce search with a small delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if searchText == newValue { // Only search if text hasn't changed
+                        searchForPlaces(query: newValue)
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Search Function
+    private func searchForPlaces(query: String) {
+        print("🔍 HomeView: Searching for places with query: '\(query)'")
+        mapViewModel.searchPlaces(query: query)
+        showSearchResults = true
     }
     
     private var searchBarView: some View {
@@ -91,9 +131,117 @@ struct HomeView: View {
                 TextField("Where do you want to eat?", text: $searchText)
                     .foregroundColor(.white)
                     .accentColor(.white)
+                
+                // Clear button
+                if !searchText.isEmpty {
+                    Button(action: {
+                        searchText = ""
+                        showSearchResults = false
+                        mapViewModel.clearSearchResults()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
             }
             .padding(.horizontal, 16)
         }
+    }
+    
+    // MARK: - Search Results View
+    private var searchResultsView: some View {
+        VStack(spacing: 0) {
+            // Results header
+            HStack {
+                Text("Search Results")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Button("Hide") {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showSearchResults = false
+                    }
+                }
+                .font(.subheadline)
+                .foregroundColor(.brandRed)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+            
+            // Search results or loading/error states
+            if mapViewModel.isLoading {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+                    Text("Searching for places...")
+                        .font(.body)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .frame(height: 150)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else if let errorMessage = mapViewModel.errorMessage {
+                VStack(spacing: 16) {
+                    Text("😕").font(.system(size: 40))
+                    Text(errorMessage)
+                        .font(.body)
+                        .foregroundColor(.red.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Button(action: { searchForPlaces(query: searchText) }) {
+                        Text("Try Again")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 10)
+                            .background(Color.brandRed)
+                            .cornerRadius(10)
+                    }
+                }
+                .frame(height: 200)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else if mapViewModel.searchResults.isEmpty {
+                VStack(spacing: 12) {
+                    Text("No places found")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.7))
+                    
+                    Text("Try searching for:\n• Restaurant names (McDonald's, KFC)\n• Food types (pizza, sushi)\n• Neighborhoods")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.5))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(20)
+            } else {
+                // Results list
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(mapViewModel.searchResults) { place in
+                            PlaceSearchCard(place: place) {
+                                selectedPlace = place
+                                showDirectionsSheet = true
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.black.opacity(0.85))
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.2), lineWidth: 1))
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 85)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
     
     private var suggestionsContainerView: some View {
@@ -297,7 +445,83 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Preferences Sheet
+// MARK: - Place Search Card Component
+struct PlaceSearchCard: View {
+    let place: PlaceResult
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Place image placeholder
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 200, height: 120)
+                    .cornerRadius(8)
+                    .overlay(
+                        Image(systemName: getIconForPlace())
+                            .font(.system(size: 30))
+                            .foregroundColor(.white.opacity(0.6))
+                    )
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(place.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    if let rating = place.rating {
+                        HStack(spacing: 4) {
+                            Image(systemName: "star.fill")
+                                .foregroundColor(.yellow)
+                                .font(.system(size: 12))
+                            
+                            Text(String(format: "%.1f", rating))
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                    
+                    Text(place.address)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.6))
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+            }
+        }
+        .frame(width: 200)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+        )
+    }
+    
+    private func getIconForPlace() -> String {
+        let isRestaurant = place.types.contains { type in
+            ["restaurant", "food", "meal_takeaway", "cafe", "bakery", "bar"].contains(type)
+        }
+        
+        let isStore = place.types.contains { type in
+            ["store", "shopping_mall", "supermarket"].contains(type)
+        }
+        
+        if isRestaurant {
+            return "fork.knife"
+        } else if isStore {
+            return "bag"
+        } else {
+            return "mappin"
+        }
+    }
+}
+
+// MARK: - Preferences Sheet (unchanged)
 struct FoodPreferencesSheet: View {
     @Binding var isPresented: Bool
     var onSubmit: (RestaurantPreferences) -> Void
@@ -441,5 +665,277 @@ struct FoodPreferencesSheet: View {
         )
         onSubmit(preferences)
         isPresented = false
+    }
+}
+
+// MARK: - Directions Sheet
+struct DirectionsSheet: View {
+    let place: PlaceResult
+    @ObservedObject var mapViewModel: MapViewModel
+    @Binding var isPresented: Bool
+    
+    @State private var selectedMode: TransportMode = .driving
+    @State private var directionsResponse: DirectionsResponse?
+    @State private var isLoadingDirections = false
+    @State private var directionsError: String?
+    
+    enum TransportMode: String, CaseIterable {
+        case driving = "driving"
+        case walking = "walking"
+        case transit = "transit"
+        
+        var icon: String {
+            switch self {
+            case .driving: return "car.fill"
+            case .walking: return "figure.walk"
+            case .transit: return "bus.fill"
+            }
+        }
+        
+        var title: String {
+            switch self {
+            case .driving: return "Driving"
+            case .walking: return "Walking"
+            case .transit: return "Transit"
+            }
+        }
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Place info header
+                VStack(spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(place.name)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                            
+                            Text(place.address)
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        
+                        Spacer()
+                        
+                        if let rating = place.rating {
+                            HStack(spacing: 4) {
+                                Image(systemName: "star.fill")
+                                    .foregroundColor(.yellow)
+                                Text(String(format: "%.1f", rating))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(12)
+                }
+                .padding()
+                
+                // Transport mode selector
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Transportation")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    HStack(spacing: 12) {
+                        ForEach(TransportMode.allCases, id: \.self) { mode in
+                            Button(action: {
+                                selectedMode = mode
+                                getDirections()
+                            }) {
+                                VStack(spacing: 8) {
+                                    Image(systemName: mode.icon)
+                                        .font(.system(size: 24))
+                                    Text(mode.title)
+                                        .font(.caption)
+                                }
+                                .foregroundColor(selectedMode == mode ? .white : .white.opacity(0.6))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(selectedMode == mode ? Color.brandRed : Color.white.opacity(0.1))
+                                )
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                
+                // Directions results
+                ScrollView {
+                    VStack(spacing: 16) {
+                        if isLoadingDirections {
+                            VStack(spacing: 16) {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(1.5)
+                                Text("Getting directions...")
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                            .frame(height: 150)
+                        } else if let error = directionsError {
+                            VStack(spacing: 12) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.yellow)
+                                
+                                Text(error)
+                                    .foregroundColor(.red.opacity(0.8))
+                                    .multilineTextAlignment(.center)
+                                
+                                Button("Try Again") {
+                                    getDirections()
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(Color.brandRed)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
+                            .frame(height: 150)
+                        } else if let directions = directionsResponse?.routes.first?.legs.first {
+                            // Journey overview
+                            VStack(spacing: 16) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Duration")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.7))
+                                        Text(directions.duration.text)
+                                            .font(.title2)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.white)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text("Distance")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.7))
+                                        Text(directions.distance.text)
+                                            .font(.title2)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .padding()
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(12)
+                                
+                                // Step-by-step directions
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Directions")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    
+                                    ForEach(Array(directions.steps.enumerated()), id: \.offset) { index, step in
+                                        HStack(alignment: .top, spacing: 12) {
+                                            Text("\(index + 1)")
+                                                .font(.caption)
+                                                .fontWeight(.bold)
+                                                .foregroundColor(.white)
+                                                .frame(width: 20, height: 20)
+                                                .background(Circle().fill(Color.brandRed))
+                                            
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(step.instructions.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression))
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(.white)
+                                                
+                                                HStack {
+                                                    Text(step.distance.text)
+                                                        .font(.caption)
+                                                        .foregroundColor(.white.opacity(0.6))
+                                                    
+                                                    Text("•")
+                                                        .foregroundColor(.white.opacity(0.6))
+                                                    
+                                                    Text(step.duration.text)
+                                                        .font(.caption)
+                                                        .foregroundColor(.white.opacity(0.6))
+                                                }
+                                            }
+                                            
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 8)
+                                        
+                                        if index < directions.steps.count - 1 {
+                                            Divider()
+                                                .background(Color.white.opacity(0.2))
+                                        }
+                                    }
+                                }
+                                .padding()
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(12)
+                            }
+                        }
+                    }
+                    .padding()
+                }
+                
+                Spacer()
+            }
+            .background(Color.black)
+            .navigationTitle("Directions")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        isPresented = false
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear {
+            getDirections()
+        }
+    }
+    
+    private func getDirections() {
+        guard let userLocation = mapViewModel.userLocation,
+              let placeLocation = place.location else {
+            directionsError = "Location not available"
+            return
+        }
+        
+        isLoadingDirections = true
+        directionsError = nil
+        
+        let origin = "\(userLocation.latitude),\(userLocation.longitude)"
+        let destination = "\(placeLocation.latitude),\(placeLocation.longitude)"
+        
+        let request = DirectionsRequest(
+            origin: origin,
+            destination: destination,
+            mode: selectedMode.rawValue
+        )
+        
+        let mapsService = MapsService()
+        mapsService.getDirections(request: request)
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { [self] completion in
+                    isLoadingDirections = false
+                    
+                    if case let .failure(error) = completion {
+                        directionsError = "Failed to get directions: \(error.localizedDescription)"
+                    }
+                },
+                receiveValue: { [self] response in
+                    directionsResponse = response
+                    directionsError = nil
+                }
+            )
+            .store(in: &mapViewModel.cancellables)
     }
 }

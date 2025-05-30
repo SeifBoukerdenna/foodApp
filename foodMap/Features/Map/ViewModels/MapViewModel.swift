@@ -14,7 +14,7 @@ class MapViewModel: NSObject, ObservableObject {
     // MARK: - Private Properties
     private let locationManager = CLLocationManager()
     private let mapsService: MapsServiceProtocol
-    private var cancellables = Set<AnyCancellable>()
+    var cancellables = Set<AnyCancellable>()
     private var currentMapCenter: CLLocationCoordinate2D = CLLocationCoordinate2D(latitude: 45.5741, longitude: -73.6921)
     private var currentZoom: Float = 13.0
     

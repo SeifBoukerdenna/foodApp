@@ -121,7 +121,7 @@ struct DirectionsRoute: Codable {
     
     enum CodingKeys: String, CodingKey {
         case legs, summary
-        case overviewPolyline = "overview_polyline"
+        case overviewPolyline = "overviewPolyline"
     }
 }
 
@@ -131,12 +131,6 @@ struct DirectionsLeg: Codable {
     let startAddress: String
     let endAddress: String
     let steps: [DirectionsStep]
-    
-    enum CodingKeys: String, CodingKey {
-        case distance, duration, steps
-        case startAddress = "start_address"
-        case endAddress = "end_address"
-    }
 }
 
 struct DirectionsDistance: Codable {
@@ -155,12 +149,6 @@ struct DirectionsStep: Codable {
     let instructions: String
     let startLocation: PlaceLocation
     let endLocation: PlaceLocation
-    
-    enum CodingKeys: String, CodingKey {
-        case distance, duration, instructions
-        case startLocation = "start_location"
-        case endLocation = "end_location"
-    }
 }
 
 struct PhotoUrlResponse: Codable {
