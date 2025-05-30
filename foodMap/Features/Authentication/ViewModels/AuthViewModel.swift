@@ -7,6 +7,7 @@ class AuthViewModel: ObservableObject {
     @Published var isAuthenticated = false
     @Published var user: User?
     @Published var email = ""
+    @Published var username = "" // Added username property
     @Published var password = ""
     @Published var displayName = ""
     @Published var errorMessage = ""
@@ -132,11 +133,16 @@ class AuthViewModel: ObservableObject {
         
         print("🔑 Attempting signup for: \(email)")
         
+        // Use username if provided, otherwise generate from email
+        let finalUsername = username.isEmpty ?
+            email.components(separatedBy: "@").first?.lowercased().replacingOccurrences(of: " ", with: "_") ?? "user" :
+            username.lowercased().replacingOccurrences(of: " ", with: "_")
+            
         let finalDisplayName = displayName.isEmpty ?
-            email.components(separatedBy: "@").first ?? "User" :
+            (username.isEmpty ? email.components(separatedBy: "@").first ?? "User" : username) :
             displayName
         
-        authService.signUp(email: email, password: password, displayName: finalDisplayName)
+        authService.signUp(email: email, password: password, displayName: finalDisplayName, username: finalUsername)
             .receive(on: DispatchQueue.main)
             .sink(
                 receiveCompletion: { [weak self] completion in
@@ -199,7 +205,7 @@ class AuthViewModel: ObservableObject {
     
     /// Delete the user's account completely
     func deleteAccount() {
-        guard let userId = user?.id else {
+        guard (user?.id) != nil else {
             errorMessage = "No user logged in"
             return
         }

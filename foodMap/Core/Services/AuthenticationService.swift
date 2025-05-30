@@ -6,7 +6,7 @@ import Security
 
 protocol AuthenticationServiceProtocol {
     func login(email: String, password: String) -> AnyPublisher<User, Error>
-    func signUp(email: String, password: String, displayName: String?) -> AnyPublisher<User, Error>
+    func signUp(email: String, password: String, displayName: String?, username: String?) -> AnyPublisher<User, Error>
     func resetPassword(email: String) -> AnyPublisher<Void, Error>
     func signOut() -> AnyPublisher<Void, Error>
     func getCurrentUser() -> User?
@@ -27,6 +27,7 @@ enum AuthError: Error, LocalizedError {
     case networkError
     case verificationError
     case keychainError
+    case usernameAlreadyTaken
     
     var errorDescription: String? {
         switch self {
@@ -48,6 +49,8 @@ enum AuthError: Error, LocalizedError {
             return "Failed to verify email. Please try again later."
         case .keychainError:
             return "Failed to securely store or retrieve credentials."
+        case .usernameAlreadyTaken:
+            return "Username already taken. Please choose a different username."
         }
     }
 }
@@ -132,113 +135,164 @@ class AuthenticationService: AuthenticationServiceProtocol {
         }.eraseToAnyPublisher()
     }
     
-    func signUp(email: String, password: String, displayName: String?) -> AnyPublisher<User, Error> {
+    func signUp(email: String, password: String, displayName: String?, username: String? = nil) -> AnyPublisher<User, Error> {
         return Future<User, Error> { promise in
-            // Create Firebase user first
-            Auth.auth().createUser(withEmail: email, password: password) { [weak self] authResult, error in
-                guard let self = self else { return }
-                
-                if let error = error {
-                    // Get detailed Firebase error
-                    let nsError = error as NSError
-                    let errorCode = nsError.code
-                    let errorMessage = nsError.localizedDescription
-                    
-                    print("Firebase create user detailed error:")
-                    print("Code: \(errorCode)")
-                    print("Message: \(errorMessage)")
-                    
-                    promise(.failure(AuthError.signUpError))
-                    return
-                }
-                
-                guard let firebaseUser = authResult?.user else {
-                    promise(.failure(AuthError.userNotFound))
-                    return
-                }
-                
-                // Successfully created Firebase user
-                print("✅ Firebase Auth user created: \(firebaseUser.uid)")
-                
-                // Save credentials on successful signup
-                _ = self.saveCredentials(email: email, password: password)
-                
-                // Update display name if provided
-                let changeRequest = firebaseUser.createProfileChangeRequest()
-                changeRequest.displayName = displayName
-                
-                changeRequest.commitChanges { [weak self] error in
-                    guard let self = self else { return }
-                    
-                    if let error = error {
-                        print("Failed to update profile: \(error.localizedDescription)")
-                    }
-                    
-                    // Create user in backend database
-                    let registerRequest = RegisterRequest(
-                        email: email,
-                        password: "**REDACTED**", // Don't send actual password to backend
-                        username: email.split(separator: "@").first?.lowercased() ?? email.lowercased(),
-                        displayName: displayName ?? "User"
-                    )
-                    
-                    // API call to register in backend
-                    self.networkClient.post(endpoint: "api/v1/auth/register", body: registerRequest)
-                        .map { (response: RegisterResponse) -> User in
-                            print("✅ Backend registration successful: \(response.uid)")
-                            return User(
-                                id: firebaseUser.uid,
-                                email: email,
-                                displayName: displayName,
-                                isEmailVerified: firebaseUser.isEmailVerified
-                            )
-                        }
-                        .catch { error -> AnyPublisher<User, Error> in
-                            // Check for specific errors
-                            if let networkError = error as? NetworkError,
-                               case .httpError(let statusCode) = networkError,
-                               statusCode == 409 {
-                                print("⚠️ Backend reports user already exists (409) - continuing anyway")
-                                // Even if our backend reports conflict, we still have a valid Firebase user
+            // Check if username is taken first (if provided)
+            if let username = username, !username.isEmpty {
+                self.checkIfUsernameExists(username)
+                    .sink(
+                        receiveCompletion: { completion in
+                            if case let .failure(error) = completion {
+                                promise(.failure(error))
+                            }
+                        },
+                        receiveValue: { exists in
+                            if exists {
+                                promise(.failure(AuthError.usernameAlreadyTaken))
                             } else {
-                                print("❌ Backend registration failed: \(error)")
+                                // Username is available, proceed with signup
+                                self.createFirebaseUser(email: email, password: password, displayName: displayName, username: username, promise: promise)
                             }
-                            
-                            // Always return success with Firebase user
-                            // since Firebase Auth is our source of truth
-                            return Just(User(
-                                id: firebaseUser.uid,
-                                email: email,
-                                displayName: displayName,
-                                isEmailVerified: firebaseUser.isEmailVerified
-                            ))
-                            .setFailureType(to: Error.self)
-                            .eraseToAnyPublisher()
                         }
-                        .sink(
-                            receiveCompletion: { completion in
-                                if case let .failure(error) = completion {
-                                    // This shouldn't happen due to the catch above
-                                    print("❌ Unexpected error: \(error)")
-                                    promise(.failure(error))
-                                }
-                            },
-                            receiveValue: { user in
-                                promise(.success(user))
-                            }
-                        )
-                        .store(in: &self.cancellables)
-                }
+                    )
+                    .store(in: &self.cancellables)
+            } else {
+                // No username provided, skip check and proceed
+                self.createFirebaseUser(email: email, password: password, displayName: displayName, username: username, promise: promise)
             }
         }.eraseToAnyPublisher()
     }
+    
+    // Helper method to check if username exists
+    private func checkIfUsernameExists(_ username: String) -> AnyPublisher<Bool, Error> {
+        return Future<Bool, Error> { promise in
+            // Create network request to check username
+            let checkUsernameRequest: [String: String] = ["username": username]
+            
+            self.networkClient.post(endpoint: "api/v1/auth/check-username", body: checkUsernameRequest)
+                .sink(
+                    receiveCompletion: { completion in
+                        if case let .failure(error) = completion {
+                            promise(.failure(error))
+                        }
+                    },
+                    receiveValue: { (response: [String: Bool]) in
+                        let exists = response["exists"] ?? false
+                        promise(.success(exists))
+                    }
+                )
+                .store(in: &self.cancellables)
+        }.eraseToAnyPublisher()
+    }
+    
+    // Helper method to create Firebase user
+    private func createFirebaseUser(email: String, password: String, displayName: String?, username: String?, promise: @escaping (Result<User, Error>) -> Void) {
+        // Create Firebase user
+        Auth.auth().createUser(withEmail: email, password: password) { [weak self] authResult, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                // Get detailed Firebase error
+                let nsError = error as NSError
+                let errorCode = nsError.code
+                let errorMessage = nsError.localizedDescription
+                
+                print("Firebase create user detailed error:")
+                print("Code: \(errorCode)")
+                print("Message: \(errorMessage)")
+                
+                promise(.failure(AuthError.signUpError))
+                return
+            }
+            
+            guard let firebaseUser = authResult?.user else {
+                promise(.failure(AuthError.userNotFound))
+                return
+            }
+            
+            // Successfully created Firebase user
+            print("✅ Firebase Auth user created: \(firebaseUser.uid)")
+            
+            // Save credentials on successful signup
+            _ = self.saveCredentials(email: email, password: password)
+            
+            // Update display name if provided
+            let changeRequest = firebaseUser.createProfileChangeRequest()
+            changeRequest.displayName = displayName
+            
+            changeRequest.commitChanges { [weak self] error in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("Failed to update profile: \(error.localizedDescription)")
+                }
+                
+                // Create user in backend database
+                let registerRequest = RegisterRequest(
+                    email: email,
+                    password: "**REDACTED**", // Don't send actual password to backend
+                    username: username ?? email.split(separator: "@").first?.lowercased() ?? email.lowercased(),
+                    displayName: displayName ?? "User"
+                )
+                
+                // API call to register in backend
+                self.networkClient.post(endpoint: "api/v1/auth/register", body: registerRequest)
+                    .map { (response: RegisterResponse) -> User in
+                        print("✅ Backend registration successful: \(response.uid)")
+                        return User(
+                            id: firebaseUser.uid,
+                            email: email,
+                            displayName: displayName,
+                            isEmailVerified: firebaseUser.isEmailVerified
+                        )
+                    }
+                    .catch { error -> AnyPublisher<User, Error> in
+                        // Check for specific errors
+                        if let networkError = error as? NetworkError,
+                           case .httpError(let statusCode) = networkError,
+                           statusCode == 409 {
+                            print("⚠️ Backend reports user already exists (409) - continuing anyway")
+                            // Even if our backend reports conflict, we still have a valid Firebase user
+                        } else {
+                            print("❌ Backend registration failed: \(error)")
+                        }
+                        
+                        // Always return success with Firebase user
+                        // since Firebase Auth is our source of truth
+                        return Just(User(
+                            id: firebaseUser.uid,
+                            email: email,
+                            displayName: displayName,
+                            isEmailVerified: firebaseUser.isEmailVerified
+                        ))
+                        .setFailureType(to: Error.self)
+                        .eraseToAnyPublisher()
+                    }
+                    .sink(
+                        receiveCompletion: { completion in
+                            if case let .failure(error) = completion {
+                                // This shouldn't happen due to the catch above
+                                print("❌ Unexpected error: \(error)")
+                                promise(.failure(error))
+                            }
+                        },
+                        receiveValue: { user in
+                            promise(.success(user))
+                        }
+                    )
+                    .store(in: &self.cancellables)
+            }
+        }
+    }
 
     // New helper method to separate concerns
-    private func createUserInDatabase(firebaseUser: FirebaseAuth.User, email: String, displayName: String?) -> AnyPublisher<User, Error> {
+    private func createUserInDatabase(firebaseUser: FirebaseAuth.User, email: String, displayName: String?, username: String?) -> AnyPublisher<User, Error> {
+        let finalUsername = username ?? email.split(separator: "@").first?.lowercased() ?? email.lowercased()
+        
         let registerRequest = RegisterRequest(
             email: email,
             password: "**REDACTED**", // Never send actual password to backend
-            username: email.split(separator: "@").first?.lowercased() ?? email.lowercased(),
+            username: finalUsername.replacingOccurrences(of: " ", with: "_"),
             displayName: displayName ?? "User"
         )
         

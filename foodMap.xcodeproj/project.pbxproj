@@ -14,6 +14,9 @@
 		71190E2A2DD7F4150045F975 /* FirebaseAnalyticsWithoutAdIdSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 71190E292DD7F4150045F975 /* FirebaseAnalyticsWithoutAdIdSupport */; };
 		71190E2D2DD7F50E0045F975 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 71190E2C2DD7F50E0045F975 /* FirebaseFirestore */; };
 		71190E2F2DD8522C0045F975 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 71190E2E2DD8522C0045F975 /* FirebaseAuth */; };
+		71F980792DEA4B09004652E2 /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 71F980782DEA4B09004652E2 /* GoogleMaps */; };
+		71F9807C2DEA4B3F004652E2 /* GooglePlaces in Frameworks */ = {isa = PBXBuildFile; productRef = 71F9807B2DEA4B3F004652E2 /* GooglePlaces */; };
+		71F9807E2DEA4B3F004652E2 /* GooglePlacesSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 71F9807D2DEA4B3F004652E2 /* GooglePlacesSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,8 +50,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				71F980792DEA4B09004652E2 /* GoogleMaps in Frameworks */,
+				71F9807E2DEA4B3F004652E2 /* GooglePlacesSwift in Frameworks */,
 				71190E1D2DD7E49F0045F975 /* FirebaseAppCheck in Frameworks */,
 				71190E2A2DD7F4150045F975 /* FirebaseAnalyticsWithoutAdIdSupport in Frameworks */,
+				71F9807C2DEA4B3F004652E2 /* GooglePlaces in Frameworks */,
 				71190E1B2DD7E49F0045F975 /* FirebaseAnalytics in Frameworks */,
 				71190E1F2DD7E49F0045F975 /* FirebaseAppDistribution-Beta in Frameworks */,
 				71190E282DD7F4150045F975 /* FirebaseAnalyticsOnDeviceConversion in Frameworks */,
@@ -111,6 +117,9 @@
 				71190E292DD7F4150045F975 /* FirebaseAnalyticsWithoutAdIdSupport */,
 				71190E2C2DD7F50E0045F975 /* FirebaseFirestore */,
 				71190E2E2DD8522C0045F975 /* FirebaseAuth */,
+				71F980782DEA4B09004652E2 /* GoogleMaps */,
+				71F9807B2DEA4B3F004652E2 /* GooglePlaces */,
+				71F9807D2DEA4B3F004652E2 /* GooglePlacesSwift */,
 			);
 			productName = foodMap;
 			productReference = 71310F542DD0272400A2634A /* foodMap.app */;
@@ -142,6 +151,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				71190E192DD7E49F0045F975 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				71F980772DEA4B09004652E2 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */,
+				71F9807A2DEA4B3F004652E2 /* XCRemoteSwiftPackageReference "ios-places-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 71310F552DD0272400A2634A /* Products */;
@@ -300,7 +311,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = foodMap/foodMap.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "\"foodMap/Preview Content\"";
 				DEVELOPMENT_TEAM = VZR89A8Z89;
 				ENABLE_PREVIEWS = YES;
@@ -310,8 +321,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -332,7 +342,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = foodMap/foodMap.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "\"foodMap/Preview Content\"";
 				DEVELOPMENT_TEAM = VZR89A8Z89;
 				ENABLE_PREVIEWS = YES;
@@ -342,8 +352,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -389,6 +398,22 @@
 				minimumVersion = 11.12.0;
 			};
 		};
+		71F980772DEA4B09004652E2 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googlemaps/ios-maps-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.0.0;
+			};
+		};
+		71F9807A2DEA4B3F004652E2 /* XCRemoteSwiftPackageReference "ios-places-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googlemaps/ios-places-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -426,6 +451,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 71190E192DD7E49F0045F975 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAuth;
+		};
+		71F980782DEA4B09004652E2 /* GoogleMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 71F980772DEA4B09004652E2 /* XCRemoteSwiftPackageReference "ios-maps-sdk" */;
+			productName = GoogleMaps;
+		};
+		71F9807B2DEA4B3F004652E2 /* GooglePlaces */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 71F9807A2DEA4B3F004652E2 /* XCRemoteSwiftPackageReference "ios-places-sdk" */;
+			productName = GooglePlaces;
+		};
+		71F9807D2DEA4B3F004652E2 /* GooglePlacesSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 71F9807A2DEA4B3F004652E2 /* XCRemoteSwiftPackageReference "ios-places-sdk" */;
+			productName = GooglePlacesSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

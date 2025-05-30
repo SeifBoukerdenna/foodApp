@@ -7,6 +7,36 @@
 
 import SwiftUI
 
+struct ErrorMessageView: View {
+    let message: String
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.yellow)
+            Text(message)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+                .fixedSize(horizontal: false, vertical: true) // Allow text wrapping
+        }
+        .padding(12)
+        .background(Color.black.opacity(0.7))
+        .cornerRadius(8)
+        .padding(.top, 8)
+    }
+}
+
+struct ErrorMessageView_Previews: PreviewProvider {
+    static var previews: some View {
+        ZStack {
+            Color.brandRed.ignoresSafeArea()
+            ErrorMessageView(message: "Username is already taken. Please choose a different username.")
+                .padding()
+        }
+    }
+}
+
+
 struct PlaceholderField: View {
     let placeholder: String
     @Binding var text: String

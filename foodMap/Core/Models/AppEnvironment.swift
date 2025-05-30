@@ -38,6 +38,10 @@ class AppEnvironment: ObservableObject {
     struct Endpoints {
         static let restaurantSuggestions = "api/v1/gpt/restaurant-suggestions"
         static let chatCompletion = "api/v1/gpt/chat"
+        static let searchPlaces = "api/v1/maps/search"
+        static let placeDetails = "api/v1/maps/place-details"
+        static let directions = "api/v1/maps/directions"
+        static let photoUrl = "api/v1/maps/photo"
     }
     
     // MARK: - App Settings

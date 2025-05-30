@@ -70,26 +70,10 @@ struct FriendsPlaceholder: View {
     }
 }
 
+
 struct MapPlaceholder: View {
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            
-            VStack(spacing: 20) {
-                Image(systemName: "map.fill")
-                    .font(.system(size: 70))
-                    .foregroundColor(.brandRed)
-                
-                Text("Map Explorer")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                
-                Text("Coming soon!")
-                    .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.7))
-            }
-        }
+        MapView() // Use the actual MapView instead of placeholder
     }
 }
 

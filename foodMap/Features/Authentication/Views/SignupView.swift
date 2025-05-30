@@ -7,6 +7,7 @@ struct SignUpView: View {
     var onSignUp: ((String) -> Void)?
     
     @State private var email = ""
+    @State private var username = "" // New username field
     @State private var password = ""
     @State private var kbHeight: CGFloat = 0
     @FocusState private var focus: Field?
@@ -14,7 +15,7 @@ struct SignUpView: View {
     
     // MARK: - Types
     private enum Field {
-        case email, password
+        case email, username, password
     }
 
     // How much the speech-bubble climbs up so it "kisses" the penguin
@@ -75,7 +76,17 @@ struct SignUpView: View {
                         .textContentType(.emailAddress)
                         .autocapitalization(.none)
                         .autocorrectionDisabled()
-                        
+                    
+                    // NEW USERNAME FIELD
+                    PlaceholderField("Username (unique)", text: $username)
+                        .focused($focus, equals: .username)
+                        .padding(.bottom, 16)
+                        .onChange(of: username) { oldValue, newValue in
+                            viewModel.username = newValue
+                        }
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("usernameField")
 
                     PlaceholderField("Password", text: $password, secure: true)
                         .focused($focus, equals: .password)
@@ -90,6 +101,7 @@ struct SignUpView: View {
                     PrimaryButton(title: "Sign Up") {
                         // Set values in view model
                         viewModel.email = email
+                        viewModel.username = username
                         viewModel.password = password
                         
                         // Call the signup method
@@ -100,18 +112,26 @@ struct SignUpView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                             if viewModel.isAuthenticated {
                                 print("SignUpView: User authenticated, invoking onSignUp callback")
-                                onSignUp?(email.components(separatedBy: "@").first ?? "User")
+                                onSignUp?(username.isEmpty ? email.components(separatedBy: "@").first ?? "User" : username)
                             }
                         }
                     }
-                    .disabled(viewModel.isLoading)
+                    .disabled(viewModel.isLoading || email.isEmpty || password.isEmpty)
+                    .opacity(viewModel.isLoading || email.isEmpty || password.isEmpty ? 0.6 : 1)
 
-                    // Display error message if there is one
+                    // Display error message if there is one - IMPROVED
                     if !viewModel.errorMessage.isEmpty {
-                        Text(viewModel.errorMessage)
-                            .foregroundColor(.red)
-                            .font(.system(size: 14))
-                            .padding(.top, 8)
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.yellow)
+                            Text(viewModel.errorMessage)
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
+                        }
+                        .padding(12)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(8)
+                        .padding(.top, 8)
                     }
 
                     // Loading indicator
@@ -171,7 +191,7 @@ struct SignUpView: View {
             if newValue && !oldValue {
                 // User just became authenticated (signup completed)
                 print("SignUpView: Authentication state changed to true")
-                onSignUp?(email.components(separatedBy: "@").first ?? "User")
+                onSignUp?(username.isEmpty ? email.components(separatedBy: "@").first ?? "User" : username)
             }
         }
     }

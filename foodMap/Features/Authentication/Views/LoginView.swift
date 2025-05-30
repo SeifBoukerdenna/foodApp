@@ -85,13 +85,24 @@ struct LoginView: View {
                         .padding(.bottom, 8)
                         .textContentType(.password)
 
-                    // Save credentials toggle
-                    Toggle("Remember me", isOn: $rememberCredentials)
-                        .foregroundColor(.white)
-                        .font(.system(size: 14))
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 4)
-                        .tint(Color.brandRed)
+                    // Save credentials toggle - IMPROVED
+                    HStack {
+                        Toggle("", isOn: $rememberCredentials)
+                            .labelsHidden()
+                            .toggleStyle(SwitchToggleStyle(tint: .white))
+                            .padding(4)
+                            .background(Color.black.opacity(0.3))
+                            .cornerRadius(16)
+                            .frame(width: 58)
+                        
+                        Text("Remember me")
+                            .foregroundColor(.white)
+                            .font(.system(size: 14))
+                            
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 4)
                                 
                     // 🔑 Forgot password
                     HStack {
@@ -115,12 +126,19 @@ struct LoginView: View {
                     }
                     .disabled(viewModel.isLoading)
 
-                    // Display error message if there is one
+                    // Display error message if there is one - IMPROVED
                     if !viewModel.errorMessage.isEmpty {
-                        Text(viewModel.errorMessage)
-                            .foregroundColor(.red)
-                            .font(.system(size: 14))
-                            .padding(.top, 8)
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.yellow)
+                            Text(viewModel.errorMessage)
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
+                        }
+                        .padding(12)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(8)
+                        .padding(.top, 8)
                     }
                     
                     // Loading indicator

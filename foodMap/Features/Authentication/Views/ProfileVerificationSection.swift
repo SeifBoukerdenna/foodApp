@@ -1,10 +1,3 @@
-//
-//  ProfileVerificationSection.swift
-//  FoodMap
-//
-//  Component for the profile screen to show verification status
-//
-
 import SwiftUI
 
 struct ProfileVerificationSection: View {
@@ -102,12 +95,9 @@ struct ProfileVerificationSection: View {
                     }
                 }
                 
-                // Error message
+                // Error message - IMPROVED
                 if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .font(.system(size: 14))
-                        .foregroundColor(.red)
-                        .padding(.top, 8)
+                    ErrorMessageView(message: viewModel.errorMessage)
                 }
             }
             .padding(16)

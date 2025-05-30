@@ -2,6 +2,8 @@ import SwiftUI
 import FirebaseCore
 import FirebaseAuth
 import FirebaseAppCheck
+import GoogleMaps
+import GooglePlaces
 
 class AppDelegate: NSObject, UIApplicationDelegate {
   func application(_ application: UIApplication,
@@ -14,6 +16,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     let deviceCheckProvider = DeviceCheckProviderFactory()
     AppCheck.setAppCheckProviderFactory(deviceCheckProvider)
     print("✅ Using DeviceCheck provider for App Check")
+
+    // Configure Google Maps and Places
+    // Replace with your actual Google Maps API key
+    if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+       let plist = NSDictionary(contentsOfFile: path),
+       let apiKey = plist["MAPS_API_KEY"] as? String {
+        GMSServices.provideAPIKey(apiKey)
+        GMSPlacesClient.provideAPIKey(apiKey)
+        print("✅ Google Maps configured with API key")
+    } else {
+        // Fallback - you should add your API key here or in GoogleService-Info.plist
+        let mapsApiKey = "AIzaSyAGYja99JlU03V-l3HJa281SEIdC_F-96Y"
+        GMSServices.provideAPIKey(mapsApiKey)
+        GMSPlacesClient.provideAPIKey(mapsApiKey)
+        print("⚠️ Using fallback Google Maps API key")
+    }
 
     return true
   }
